@@ -42,8 +42,6 @@ var ns = new function() {
 
         //score(board);
 
-        var mx = get_my_x();
-        var my = get_my_y();
 
         var fruit_goal=new Array();
         for(var i = 1; i <= get_number_of_item_types(); i++) {
@@ -54,54 +52,10 @@ var ns = new function() {
 
         board = reduce_board(board);
 
-        for(var row = 0; row < HEIGHT; row++) {
-            for(var col = 0; col < WIDTH; col++) {
-                if(board[col][row] > 0) {
-                    var dx = col-mx;
-                    var dy = row-my;
-                    var dist = Math.pow(dx, 2) + Math.pow(dy,2);
-                    if(dist==0) {
-                        return TAKE;
-                    }
-                    if(dist < min_dist) {
-                        min_dist = dist;
-                        if(Math.abs(dx) >= Math.abs(dy)) {
-                            // Go EAST or WEST
-                            if(dx > 0) {
-                                best_move = EAST;
-                            } else {
-                                best_move = WEST;
-                            }
-                        } else {
-                            if(dy > 0) {
-                                best_move = SOUTH;
-                            } else {
-                                best_move = NORTH;
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
-        return best_move;
+        return gravity(board);
     }
 
-
-    function score(board) {
-        var score = 0;
-
-        var b = new Board(board);
-        b.move(NORTH,EAST);
-
-        // Material I have
-        for( var i = 1; i <= num_types; i++ )
-            {
-            score += get_my_item_count(i);
-            score -= get_opponent_item_count(i);
-            }
-        trace(score);
-    }
 
     function search() {
         var my_inv_moves = board.get_invalid_moves(MY);
@@ -141,6 +95,64 @@ var ns = new function() {
             }
         }
         return new_board;
+    }
+
+    function gravity(board) {
+        var mx = get_my_x();
+        var my = get_my_y();
+        var vector = { theta: 0, r: 0 };
+        for(var row = 0; row < HEIGHT; row++) {
+            for(var col = 0; col < WIDTH; col++) {
+                if(board[col][row] > 0) {
+                    var dx = col-mx;
+                    var dy = row-my;
+                    var dist = Math.sqrt(Math.pow(dx, 2) + Math.pow(dy,2));
+                    if(dist==0) {
+                        return TAKE;
+                    }
+
+                    var force = 1 / Math.pow(dist,2);
+                    var theta = Math.atan2(-dy,dx);
+                    var tx = vector.r * Math.cos(vector.theta);
+                    var ty = vector.r * Math.sin(vector.theta);
+                    tx += force * Math.cos(theta);
+                    ty += force * Math.sin(theta);
+                    vector.r = Math.sqrt(Math.pow(tx, 2) + Math.pow(ty,2));
+                    vector.theta = Math.atan2(ty,tx);
+
+                    /*
+                    if(dist < min_dist) {
+                        min_dist = dist;
+                        if(Math.abs(dx) >= Math.abs(dy)) {
+                            // Go EAST or WEST
+                            if(dx > 0) {
+                                best_move = EAST;
+                            } else {
+                                best_move = WEST;
+                            }
+                        } else {
+                            if(dy > 0) {
+                                best_move = SOUTH;
+                            } else {
+                                best_move = NORTH;
+                            }
+                        }
+                    }
+                    */
+                }
+            }
+        }
+        var d = vector.theta;
+        if( d <= Math.PI / 4 && d > -Math.PI / 4 ) {
+            return EAST;
+        } else if( d >= Math.PI / 4 && d <  3 * Math.PI / 4 ) {
+            return NORTH;
+        } else if( d >= 3* Math.PI / 4 || d <= -3 * Math.PI / 4 ) {
+            return WEST;
+        } else {
+            return SOUTH;
+        }
+
     }
 
 
