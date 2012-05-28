@@ -3,7 +3,9 @@
 
 var ns = (function () {
     "use strict";
-    var MY, OPP, num_cells, num_types, x_delta, y_delta, pass, Board;
+    var MY, OPP, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
+        max_depth = 4, nodes_searched;
+
 
     Board = {
         init: function (start_board) {
@@ -24,8 +26,8 @@ var ns = (function () {
             Board.oppCollected = [];
             Board.myCollected = [];
             for (i = 0; i < get_number_of_item_types(); i += 1) {
-                Board.myCollected[i] = 0;
-                Board.oppCollected[i] = 0;
+                Board.myCollected[i] = get_my_item_count(i + 1);
+                Board.oppCollected[i] = get_opponent_item_count(i + 1);
             }
 
             Board.myX = get_my_x();
@@ -71,7 +73,7 @@ var ns = (function () {
                     undo.oppFruitType = Board.board[Board.oppX][Board.oppY];
                     undo.oppFruitX = Board.oppX;
                     undo.oppFruitY = Board.oppY;
-                    undo.oppFruitCnt = 0.5;
+                    undo.oppFruitCnt = 1;
 
                     Board.oppCollected[Board.board[Board.oppX][Board.oppY] - 1] += 1;
                     Board.board[Board.oppX][Board.oppY] = 0;
@@ -118,14 +120,6 @@ var ns = (function () {
                 }
             }
 
-            if (Board.myX === Board.oppX && Board.myY === Board.oppY) {
-                Board.history[Board.myX][Board.myY] = 3;
-            } else {
-                Board.history[Board.myX][Board.myY] = 1;
-                Board.history[Board.oppX][Board.oppY] = 2;
-            }
-
-
         },
         undoMove: function () {
             var undo = Board.history.pop();
@@ -160,7 +154,8 @@ var ns = (function () {
             var moves, gen;
 
             gen = function (x, y) {
-                var moves = [PASS]; // PASS is probably a waste of search time
+                //var moves = [PASS]; // PASS is probably a waste of search time
+                var moves = []; // PASS is probably a waste of search time
                 if (x >= 1) {
                     moves.push(WEST);
                 }
@@ -183,6 +178,8 @@ var ns = (function () {
                 myMoves: gen(Board.myX, Board.myY),
                 oppMoves: gen(Board.oppX, Board.oppY)
             };
+
+            return moves;
         }
     };
 
@@ -292,15 +289,64 @@ var ns = (function () {
 
     }
 
+    function calc_score(board) {
+        var score, i, types;
+
+        score = 0;
+        for (i = 0; i < num_item_types; i += 1) {
+            score += board.myCollected[i] - board.oppCollected[i];
+        }
+        nodes_searched += 1;
+        return score;
+    }
+
+
+    function search(board, depth) {
+        var score, board_score, moves, myMove, oppMove, i, j,
+            best_move, best_score, ret_val, oppBestScore;
+
+        best_score = -99999;
+
+        if (depth === 0) {
+            ret_val = { score: calc_score(board) };
+        } else {
+            moves = board.movegen();
+
+            for (i = 0; i < moves.myMoves.length; i += 1) {
+                oppBestScore = 99999;
+                for (j = 0; j < moves.oppMoves.length; j += 1) {
+                    board.processMove(moves.myMoves[i], moves.oppMoves[j]);
+                    board_score = search(board, depth - 1).score;
+                    //trace("Opp move  d:" + depth + " move:" + moves.oppMoves[j] + " score:" + board_score);
+
+                    oppBestScore = Math.min(oppBestScore, board_score);
+                    board.undoMove();
+                }
+                if (depth === max_depth) {
+                    trace("My move:" + moves.myMoves[i] + " score: " + oppBestScore);
+                }
+                if (oppBestScore > best_score) {
+                    best_score = oppBestScore;
+                    best_move = moves.myMoves[i];
+                }
+
+            }
+
+            ret_val = { move: best_move, score: best_score };
+        }
+
+        return ret_val;
+    }
+
     function new_game() {
         num_cells = WIDTH * HEIGHT;
-        num_types = get_number_of_item_types();
+        num_item_types = get_number_of_item_types();
     }
 
     function make_move() {
-        var board, min_dist, best_move, fruit_goal, i;
+        var board, min_dist, best_move, fruit_goal, i, move;
 
-        board = get_board();
+        Board.init(get_board());
         min_dist = 9e99;
 
         if (pass) {
@@ -320,34 +366,20 @@ var ns = (function () {
             return b.count - a.count;
         });
 
-        board = reduce_board(board);
+        //board = reduce_board(board);
 
+        nodes_searched = 0;
+        move = search(Board, max_depth);
+        trace(nodes_searched);
 
-        return gravity(board);
+        return move.move;
     }
 
-
-    function search() {
-        var my_inv_moves = board.get_invalid_moves(MY),
-            opp_inv_moves = board.get_invalid_moves(OPP),
-            my_move, opp_move;
-
-        for (my_move in std_moves) {
-            if (my_inv_moves.indexOf(my_move) !== -1) {
-                continue;
-            }
-            for (opp_move in std_moves) {
-                if (opp_inv_moves.indexOf(opp_move) !== -1) {
-                    continue;
-                }
-            }
-        }
-    }
 
 
     return { new_game: new_game, make_move: make_move };
 
-})();
+}());
 
 
 
