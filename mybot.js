@@ -3,6 +3,7 @@
 
 /* Goals
  *
+ * Rewrite as a alternating move system to support negamax
  * Return best move found from interrupted searches
  * Proper alpha-beta pruning
  */
@@ -13,7 +14,7 @@ function Trace(s) {
 
 var ns = (function () {
     "use strict";
-    var MY, OPP, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
+    var MY=0, OPP=1, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
         max_depth = 4, nodes_searched, nodeCheckThreshold, time_is_up = false, halfFruit, startTime;
 
 
@@ -24,6 +25,8 @@ var ns = (function () {
             // initialize board
             Board.board = [];
             Board.move_num = 0;
+            Board.side = MY;
+            Board.lastMove = {};
 
             for (i = 0; i < WIDTH; i += 1) {
                 Board.board[i] = [];
@@ -34,29 +37,35 @@ var ns = (function () {
 
             Board.history = [];
 
-            Board.oppCollected = [];
-            Board.myCollected = [];
+            Board.collected = [];
             for (i = 0; i < get_number_of_item_types(); i += 1) {
-                Board.myCollected[i] = get_my_item_count(i + 1);
-                Board.oppCollected[i] = get_opponent_item_count(i + 1);
+                Board.collected[MY] = get_my_item_count(i + 1);
+                Board.collected[OPP] = get_opponent_item_count(i + 1);
             }
 
-            Board.myX = get_my_x();
-            Board.myY = get_my_y();
-            Board.oppX = get_opponent_x();
-            Board.oppY = get_opponent_y();
+            Board.loc = [];
+
+            Board.loc[MY] = { x: get_my_y(), y: get_my_y() };
+            Board.loc[OPP] = { x: get_opponent_x(), y: get_opponent_y() };
         },
-        processMove: function (myMove, oppMove) {
-            var undo = {
+        processMove: function (move) {
+            var X, Y, undo, loc, loc_other;
+
+            undo = {
                 myX: Board.myX,
                 myY: Board.myY,
                 oppX: Board.oppX,
-                oppY: Board.oppY
+                oppY: Board.oppY,
+                fruitChange: []
             };
             Board.history.push(undo);
             Board.move_num += 1;
 
-            if ((Board.myX === Board.oppX) && (Board.myY === Board.oppY) && (myMove === TAKE) && (oppMove === TAKE) && Board.board[Board.myX][Board.myY] > 0) {
+            loc = Board.loc[Board.side];
+            loc_other = Board.loc[1 - Board.size];
+
+            if (Board.lastMove.fruit !=== undefined && Board.lastMove.x === X && Board.lastMove.y === Y && move ===TAKE) {
+                    (Board.myX === Board.oppX) && (Board.myY === Board.oppY) && (myMove === TAKE) && (oppMove === TAKE) && Board.board[Board.myX][Board.myY] > 0) {
                 undo.myFruitType = Board.board[Board.myX][Board.myY];
                 undo.myFruitX = Board.myX;
                 undo.myFruitY = Board.myY;
@@ -72,6 +81,18 @@ var ns = (function () {
                 Board.board[Board.myX][Board.myY] = 0;
 
             } else {
+                if (move === TAKE) {
+                    if(loc.x == loc_other.x && loc.y == loc_other.y) {
+                        amt = 0.5
+                    } else {
+                        amt = 1;
+                    }
+                    fruitType = Board.board[loc.x][loc.y] - 1;
+                    Board.collected[Board.side][fruitType] += amt;
+                    Board.board[loc.x][loc.y] -= amt;
+                    undo.fruitChange[Board.side] = { fruitType: fruitType, amt: amt, x: loc.x, y: loc.y };
+
+                }
                 if (myMove === TAKE && Board.board[Board.myX][Board.myY] > 0) {
                     undo.myFruitType = Board.board[Board.myX][Board.myY];
                     undo.myFruitX = Board.myX;
@@ -91,45 +112,17 @@ var ns = (function () {
                     Board.board[Board.oppX][Board.oppY] = 0;
                 }
             }
-            if (myMove === NORTH) {
-                if (Board.myY - 1 >= 0) {
-                    Board.myY = Board.myY - 1;
-                }
+            if(move === NORTH) {
+                Board.loc[Board.side].y -= 1;
             }
-            if (oppMove === NORTH) {
-                if (Board.oppY - 1 >= 0) {
-                    Board.oppY = Board.oppY - 1;
-                }
+            if(move === SOUTH) {
+                Board.loc[Board.side].y += 1;
             }
-            if (myMove === SOUTH) {
-                if (Board.myY + 1 < HEIGHT) {
-                    Board.myY = Board.myY + 1;
-                }
+            if(move === EAST) {
+                Board.loc[Board.side].x += 1;
             }
-            if (oppMove === SOUTH) {
-                if (Board.oppY + 1 < HEIGHT) {
-                    Board.oppY = Board.oppY + 1;
-                }
-            }
-            if (myMove === EAST) {
-                if (Board.myX + 1 < WIDTH) {
-                    Board.myX = Board.myX + 1;
-                }
-            }
-            if (oppMove === EAST) {
-                if (Board.oppX + 1 < WIDTH) {
-                    Board.oppX = Board.oppX + 1;
-                }
-            }
-            if (myMove === WEST) {
-                if (Board.myX - 1 >= 0) {
-                    Board.myX = Board.myX - 1;
-                }
-            }
-            if (oppMove === WEST) {
-                if (Board.oppX - 1 >= 0) {
-                    Board.oppX = Board.oppX - 1;
-                }
+            if(move === WEST) {
+                Board.loc[Board.side].x -= 1;
             }
 
         },
@@ -351,6 +344,62 @@ var ns = (function () {
         return score;
     }
 
+    function negamax(board, depth, alpha, beta, side) {
+        if (!time_is_up) {
+            if (depth === 0) {
+                ret_val = { score: calc_score(board) };
+            } else {
+                moves = board.movegen();
+
+                for (i = 0; i < moves.myMoves.length && !time_is_up; i += 1) {
+                        board.processMove(moves.myMoves[i], moves.oppMoves[j]);
+                        move = search(board, depth - 1, startTime, maxTimeMS);
+                        board.undoMove();
+                        //Trace("Opp move  d:" + depth + " move:" + moves.oppMoves[j] + " score:" + board_score);
+
+                        if (move !== undefined) {
+                            board_score = move.score;
+                            oppBestScore = Math.min(oppBestScore, board_score);
+
+                            if (oppBestScore < best_score) {
+                                prune = true;
+                            }
+                        }
+                    }
+                    //if (depth === max_depth) {
+                    //    //Trace("My move:" + moves.myMoves[i] + " score: " + oppBestScore);
+                    //}
+                    if (oppBestScore > best_score) {
+                        best_score = oppBestScore;
+                        best_move = moves.myMoves[i];
+                    }
+
+                }
+
+                ret_val = { move: best_move, score: best_score };
+            }
+        }
+        if (time_is_up) {
+            ret_val = undefined;
+        }
+        return ret_val;
+
+    }
+
+
+
+            function negamax(node, depth, α, β, color)
+    if node is a terminal node or depth = 0
+        return color * the heuristic value of node
+    else
+        foreach child of node
+            val := -negamax(child, depth-1, -β, -α, -color)
+            {the following if statement constitutes alpha-beta pruning}
+            if val≥β
+                return val
+            if val≥α
+                α:=val
+        return α
 
     function search(board, depth, startTime, maxTimeMS) {
         var score, board_score, moves, myMove, oppMove, i, j,
