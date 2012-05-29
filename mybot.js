@@ -1,6 +1,11 @@
 /*global WIDTH, HEIGHT, get_number_of_item_types, get_my_x, get_my_y, get_opponent_x, get_opponent_y, EAST, NORTH, WEST, SOUTH, TAKE, PASS */
 /*global get_board, get_total_item_count, get_my_item_count, get_opponent_item_count, trace */
 
+/* Goals
+ *
+ * Return best move found from interrupted searches
+ * Proper alpha-beta pruning
+ */
 function Trace(s) {
     "use strict";
     //trace(s);
