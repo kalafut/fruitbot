@@ -1,10 +1,15 @@
 /*global WIDTH, HEIGHT, get_number_of_item_types, get_my_x, get_my_y, get_opponent_x, get_opponent_y, EAST, NORTH, WEST, SOUTH, TAKE, PASS */
-/*global get_board, get_total_item_count, get_my_item_count, get_opponent_item_count */
+/*global get_board, get_total_item_count, get_my_item_count, get_opponent_item_count, trace */
+
+function Trace(s) {
+    "use strict";
+    //trace(s);
+}
 
 var ns = (function () {
     "use strict";
     var MY, OPP, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
-        max_depth = 4, nodes_searched;
+        max_depth = 4, nodes_searched, nodeCheckThreshold, time_is_up = false, halfFruit, startTime;
 
 
     Board = {
@@ -13,6 +18,7 @@ var ns = (function () {
 
             // initialize board
             Board.board = [];
+            Board.move_num = 0;
 
             for (i = 0; i < WIDTH; i += 1) {
                 Board.board[i] = [];
@@ -43,6 +49,7 @@ var ns = (function () {
                 oppY: Board.oppY
             };
             Board.history.push(undo);
+            Board.move_num += 1;
 
             if ((Board.myX === Board.oppX) && (Board.myY === Board.oppY) && (myMove === TAKE) && (oppMove === TAKE) && Board.board[Board.myX][Board.myY] > 0) {
                 undo.myFruitType = Board.board[Board.myX][Board.myY];
@@ -124,6 +131,8 @@ var ns = (function () {
         undoMove: function () {
             var undo = Board.history.pop();
 
+            Board.move_num -= 1;
+
             Board.myX = undo.myX;
             Board.myY = undo.myY;
             if (undo.myFruitType !== undefined) {
@@ -156,6 +165,9 @@ var ns = (function () {
             gen = function (x, y) {
                 //var moves = [PASS]; // PASS is probably a waste of search time
                 var moves = []; // PASS is probably a waste of search time
+                if (Board.board[x][y] > 0) {
+                    moves.push(TAKE);
+                }
                 if (x >= 1) {
                     moves.push(WEST);
                 }
@@ -167,9 +179,6 @@ var ns = (function () {
                 }
                 if (y <= HEIGHT - 2) {
                     moves.push(SOUTH);
-                }
-                if (Board.board[x][y] > 0) {
-                    moves.push(TAKE);
                 }
                 return moves;
             };
@@ -290,52 +299,134 @@ var ns = (function () {
     }
 
     function calc_score(board) {
-        var score, i, types;
+        var score, material, i, types, row, col, dx, dy, dist, min_dist,
+            myCats = 0, oppCats = 0, wonCats = [], cell;
 
-        score = 0;
-        for (i = 0; i < num_item_types; i += 1) {
-            score += board.myCollected[i] - board.oppCollected[i];
-        }
         nodes_searched += 1;
+
+        // First award categories won
+        for (i = 0; i < num_item_types; i += 1) {
+            if (board.myCollected[i] > halfFruit[i]) {
+                myCats += 1;
+                wonCats.push(i);
+            } else if (board.oppCollected[i] > halfFruit[i]) {
+                oppCats += 1;
+                wonCats.push(i);
+            }
+        }
+
+        min_dist = 9999;
+        for (row = 0; row < HEIGHT; row += 1) {
+            for (col = 0; col < WIDTH; col += 1) {
+                cell = board.board[col][row];
+                if (cell > 0 && wonCats.indexOf(cell - 1) === -1) {
+                    dx = col - board.myX;
+                    dy = row - board.myY;
+                    dist = Math.abs(dx) + Math.abs(dy);
+
+                    if (dist < min_dist) {
+                        min_dist = dist;
+                    }
+                }
+            }
+        }
+        if (min_dist === 9999) {
+            min_dist = 0;
+        }
+
+        material = 0;
+        for (i = 0; i < num_item_types; i += 1) {
+            if (wonCats.indexOf(i) === -1) {
+                material += board.myCollected[i] - board.oppCollected[i];
+            }
+        }
+
+        score = 5 * (myCats - oppCats) + material - 0.01 * min_dist;
+
         return score;
     }
 
 
-    function search(board, depth) {
+    function search(board, depth, startTime, maxTimeMS) {
         var score, board_score, moves, myMove, oppMove, i, j,
-            best_move, best_score, ret_val, oppBestScore;
+            best_move, best_score, ret_val, oppBestScore, prune, move;
 
         best_score = -99999;
-
-        if (depth === 0) {
-            ret_val = { score: calc_score(board) };
-        } else {
-            moves = board.movegen();
-
-            for (i = 0; i < moves.myMoves.length; i += 1) {
-                oppBestScore = 99999;
-                for (j = 0; j < moves.oppMoves.length; j += 1) {
-                    board.processMove(moves.myMoves[i], moves.oppMoves[j]);
-                    board_score = search(board, depth - 1).score;
-                    //trace("Opp move  d:" + depth + " move:" + moves.oppMoves[j] + " score:" + board_score);
-
-                    oppBestScore = Math.min(oppBestScore, board_score);
-                    board.undoMove();
-                }
-                if (depth === max_depth) {
-                    trace("My move:" + moves.myMoves[i] + " score: " + oppBestScore);
-                }
-                if (oppBestScore > best_score) {
-                    best_score = oppBestScore;
-                    best_move = moves.myMoves[i];
-                }
-
+        if (nodes_searched > nodeCheckThreshold) {
+            if ((new Date()) - startTime > maxTimeMS) {
+                time_is_up = true;
+            } else {
+                nodeCheckThreshold = nodes_searched + 10000;
             }
-
-            ret_val = { move: best_move, score: best_score };
         }
 
+
+
+        if (!time_is_up) {
+            if (depth === 0) {
+                ret_val = { score: calc_score(board) };
+            } else {
+                moves = board.movegen();
+
+                for (i = 0; i < moves.myMoves.length && !time_is_up; i += 1) {
+                    oppBestScore = 99999;
+                    prune = false;
+                    for (j = 0; j < moves.oppMoves.length && !prune && !time_is_up; j += 1) {
+                        board.processMove(moves.myMoves[i], moves.oppMoves[j]);
+                        move = search(board, depth - 1, startTime, maxTimeMS);
+                        board.undoMove();
+                        //Trace("Opp move  d:" + depth + " move:" + moves.oppMoves[j] + " score:" + board_score);
+
+                        if (move !== undefined) {
+                            board_score = move.score;
+                            oppBestScore = Math.min(oppBestScore, board_score);
+
+                            if (oppBestScore < best_score) {
+                                prune = true;
+                            }
+                        }
+                    }
+                    //if (depth === max_depth) {
+                    //    //Trace("My move:" + moves.myMoves[i] + " score: " + oppBestScore);
+                    //}
+                    if (oppBestScore > best_score) {
+                        best_score = oppBestScore;
+                        best_move = moves.myMoves[i];
+                    }
+
+                }
+
+                ret_val = { move: best_move, score: best_score };
+            }
+        }
+        if (time_is_up) {
+            ret_val = undefined;
+        }
         return ret_val;
+    }
+
+    function search_mgr(board, startDepth) {
+        var currentDepth = startDepth, startTime = new Date(),
+            move, bestMove, exitNow = false;
+
+        nodes_searched = 0;
+        nodeCheckThreshold = 10000;
+        time_is_up = false
+        bestMove = {};
+        while (!exitNow) {
+            Trace("Searching " + currentDepth);
+            move = search(board, currentDepth, startTime, 3000);
+            if (move !== undefined) {
+                bestMove = move;
+            } else {
+                exitNow = true;
+            }
+
+            currentDepth += 1;
+        }
+
+        return bestMove;
+
     }
 
     function new_game() {
@@ -344,7 +435,13 @@ var ns = (function () {
     }
 
     function make_move() {
-        var board, min_dist, best_move, fruit_goal, i, move;
+        var board, min_dist, best_move, fruit_goal, i, move, start;
+
+        halfFruit = [];
+        for (i = 0; i < num_item_types; i += 1) {
+            halfFruit[i] = get_total_item_count(i + 1) / 2;
+        }
+
 
         Board.init(get_board());
         min_dist = 9e99;
@@ -369,8 +466,9 @@ var ns = (function () {
         //board = reduce_board(board);
 
         nodes_searched = 0;
-        move = search(Board, max_depth);
-        trace(nodes_searched);
+        startTime = new Date();
+        move = search_mgr(Board, 2);
+        Trace(nodes_searched * 1000 / ((new Date()) - startTime));
 
         return move.move;
     }
