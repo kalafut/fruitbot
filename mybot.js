@@ -7,10 +7,6 @@
  * Return best move found from interrupted searches
  * Proper alpha-beta pruning
  */
-function my_trace(s) {
-    "use strict";
-    //trace(s);
-}
 
 var ns = (function () {
     "use strict";
@@ -38,23 +34,23 @@ var ns = (function () {
 
             Board.history = [];
 
-            Board.collected = [];
+            Board.collected = [[], []];
             for (i = 0; i < get_number_of_item_types(); i += 1) {
-                Board.collected[MY] = get_my_item_count(i + 1);
-                Board.collected[OPP] = get_opponent_item_count(i + 1);
+                Board.collected[MY][i] = get_my_item_count(i + 1);
+                Board.collected[OPP][i] = get_opponent_item_count(i + 1);
             }
 
             Board.loc = [];
 
-            Board.loc[MY] = { x: get_my_y(), y: get_my_y() };
+            Board.loc[MY] = { x: get_my_x(), y: get_my_y() };
             Board.loc[OPP] = { x: get_opponent_x(), y: get_opponent_y() };
         },
         processMove: function (move) {
-            var X, Y, undo, loc, loc_other, fruitType, amt;
+            var X, Y, undo, loc, loc_other, fruitType, amt, test_undo;
 
             loc = Board.loc[Board.side];
-            loc_other = Board.loc[1 - Board.size];
-            undo = { loc: loc };
+            loc_other = Board.loc[1 - Board.side];
+            undo = { loc: { x: loc.x, y: loc.y } };
 
             if (move === TAKE) {
                 if (!Board.pendingTake) {
@@ -93,13 +89,13 @@ var ns = (function () {
             }
             Board.history.push(undo);
             Board.move_num += 1;
+            Board.side = 1 - Board.side;
         },
         undoMove: function () {
-            var other_side = 1 - Board.size,
-                undo = Board.history.pop();
+            var other_side = 1 - Board.side, undo;
 
+            undo = Board.history.pop();
             Board.move_num -= 1;
-
             Board.loc[other_side] = undo.loc;
 
             if (undo.fruitType !== undefined) {
@@ -111,6 +107,7 @@ var ns = (function () {
                     Board.board[undo.loc.x][undo.loc.y] += undo.amt;
                 }
             }
+            Board.side = other_side;
         },
 
         movegen: function () {
@@ -230,17 +227,21 @@ var ns = (function () {
     }
 
     function calc_score(board) {
-        var score, material, i, types, row, col, dx, dy, dist, min_dist,
-            myCats = 0, oppCats = 0, wonCats = [], cell;
+        var score, material, i, types, row, col, dx, dy, dist, min_dist, loc,
+            myCats = 0, oppCats = 0, wonCats = [], cell, myCollected, oppCollected;
 
         nodes_searched += 1;
 
+        myCollected = Board.collected[Board.side];
+        oppCollected = Board.collected[1 - Board.side];
+        loc = Board.loc[Board.side];
+
         // First award categories won
         for (i = 0; i < num_item_types; i += 1) {
-            if (board.myCollected[i] > halfFruit[i]) {
+            if (myCollected[i] > halfFruit[i]) {
                 myCats += 1;
                 wonCats.push(i);
-            } else if (board.oppCollected[i] > halfFruit[i]) {
+            } else if (oppCollected[i] > halfFruit[i]) {
                 oppCats += 1;
                 wonCats.push(i);
             }
@@ -251,8 +252,8 @@ var ns = (function () {
             for (col = 0; col < WIDTH; col += 1) {
                 cell = board.board[col][row];
                 if (cell > 0 && wonCats.indexOf(cell - 1) === -1) {
-                    dx = col - board.myX;
-                    dy = row - board.myY;
+                    dx = col - loc.x;
+                    dy = row - loc.y;
                     dist = Math.abs(dx) + Math.abs(dy);
 
                     if (dist < min_dist) {
@@ -268,7 +269,7 @@ var ns = (function () {
         material = 0;
         for (i = 0; i < num_item_types; i += 1) {
             if (wonCats.indexOf(i) === -1) {
-                material += board.myCollected[i] - board.oppCollected[i];
+                material += myCollected[i] - oppCollected[i];
             }
         }
 
@@ -278,7 +279,15 @@ var ns = (function () {
     }
 
     function negamax(board, depth, alpha, beta, side, startTime, maxTimeMS) {
-        var ret_val, moves, i, j, val, best_move;
+        var ret_val, moves, i, j, val, best_move, best_score;
+
+        if (nodes_searched > nodeCheckThreshold) {
+            if ((new Date()) - startTime > maxTimeMS) {
+                time_is_up = true;
+            } else {
+                nodeCheckThreshold = nodes_searched + 10000;
+            }
+        }
 
         if (!time_is_up) {
             if (depth === 0) {
@@ -288,22 +297,24 @@ var ns = (function () {
 
                 for (i = 0; i < moves.length && !time_is_up; i += 1) {
                     board.processMove(moves[i]);
-                    val = -negamax(board, depth - 1, -beta, -alpha, 1 - side, startTime, maxTimeMS);
+                    val = negamax(board, depth - 1, -beta, -alpha, 1 - side, startTime, maxTimeMS);
+                    val.score *= -1;
                     board.undoMove();
 
-                    if (val > beta) {
+                    if (val.score > beta) {
                         ret_val = val;
-                    } else if (val > alpha) {
-                        alpha = val;
-                        best_move = moves[i];
+                    } else if (val.score > alpha) {
+                        alpha = val.score;
+                        ret_val = val;
+                        ret_val.move = moves[i];
                     }
                 }
-                if (ret_val === undefined) {
-                    ret_val = alpha;
-                }
+                //if (ret_val === undefined) {
+                //    ret_val = alpha;
+                //}
             }
 
-            ret_val = { move: best_move, score: best_score };
+            //ret_val = { move: best_move, score: best_score };
         }
 
         if (time_is_up) {
@@ -394,19 +405,22 @@ var ns = (function () {
         nodeCheckThreshold = 10000;
         time_is_up = false;
         bestMove = {};
-        while (!exitNow) {
-            my_trace("Searching " + currentDepth);
-            move = search(board, currentDepth, startTime, 3000);
-            if (move !== undefined) {
-                bestMove = move;
-            } else {
-                exitNow = true;
-            }
+        Board.processMove(EAST);
+        Board.undoMove();
+        move = negamax(board, 2, -99999, 99999, MY, startTime, 1000);
+        //while (!exitNow) {
+        //    trace("Searching " + currentDepth);
+        //    move = negamax(board, currentDepth, -99999, 99999, MY, startTime, 1000);
+        //    if (move !== undefined) {
+        //        bestMove = move;
+        //    } else {
+        //        exitNow = true;
+        //    }
 
-            currentDepth += 1;
-        }
+        //    currentDepth += 1;
+        //}
 
-        return bestMove;
+        return move;
 
     }
 
@@ -431,7 +445,7 @@ var ns = (function () {
         nodes_searched = 0;
         startTime = new Date();
         move = search_mgr(Board, 2);
-        my_trace(nodes_searched * 1000 / ((new Date()) - startTime));
+        trace(nodes_searched * 1000 / ((new Date()) - startTime));
 
         return move.move;
     }
