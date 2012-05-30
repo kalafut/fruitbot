@@ -65,10 +65,11 @@ var ns = (function () {
                     Board.board[loc.x][loc.y] -= amt;
                     undo.fruitChange = { fruitType: fruitType, amt: amt };
                 } else {
-                    fruitType = Board.board[loc.x][loc.y] - 1;
+                    fruitType = Board.board[loc.x][loc.y] - 0.5; // Because we already took half the fruit so the type if FUBAR
                     Board.collected[Board.side][fruitType] += 0.5;
                     Board.board[loc.x][loc.y] = 0;
                     undo.fruitChange = { fruitType: fruitType, amt: 0.5, doubleTake: true };
+                    Board.pendingTake = false;
                 }
             } else {
                 if (move !== TAKE && Board.pendingTake) {
@@ -98,13 +99,13 @@ var ns = (function () {
             Board.move_num -= 1;
             Board.loc[other_side] = undo.loc;
 
-            if (undo.fruitType !== undefined) {
-                if (undo.doubleTake) {
-                    Board.collected[other_side][undo.fruitType] -= undo.amt;
-                    Board.board[undo.loc.x][undo.loc.y] += undo.amt;
+            if (undo.fruitChange !== undefined) {
+                if (undo.fruitChange.doubleTake) {
+                    Board.collected[other_side][undo.fruitChange.fruitType] -= undo.fruitChange.amt;
+                    Board.board[undo.loc.x][undo.loc.y] += undo.fruitChange.amt;
                 } else {
-                    Board.collected[other_side][undo.fruitType] -= undo.amt;
-                    Board.board[undo.loc.x][undo.loc.y] += undo.amt;
+                    Board.collected[other_side][undo.fruitChange.fruitType] -= undo.fruitChange.amt;
+                    Board.board[undo.loc.x][undo.loc.y] += undo.fruitChange.amt;
                 }
             }
             Board.side = other_side;
@@ -279,7 +280,7 @@ var ns = (function () {
     }
 
     function negamax(board, depth, alpha, beta, side, startTime, maxTimeMS) {
-        var ret_val, moves, i, j, val, best_move, best_score;
+        var ret_val, moves, i, j, val, best_move, best_score, prune;
 
         if (nodes_searched > nodeCheckThreshold) {
             if ((new Date()) - startTime > maxTimeMS) {
@@ -291,27 +292,32 @@ var ns = (function () {
 
         if (!time_is_up) {
             if (depth === 0) {
-                ret_val = { score: calc_score(board) };
+                ret_val = { score: side * calc_score(board) };
             } else {
+                prune = false;
                 moves = board.movegen();
 
-                for (i = 0; i < moves.length && !time_is_up; i += 1) {
+                for (i = 0; i < moves.length && !time_is_up && !prune; i += 1) {
                     board.processMove(moves[i]);
-                    val = negamax(board, depth - 1, -beta, -alpha, 1 - side, startTime, maxTimeMS);
+                    val = negamax(board, depth - 1, -beta, -alpha, -side, startTime, maxTimeMS);
                     val.score *= -1;
+                    if (depth === 4) {
+                        trace("My move:" + moves[i] + " score: " + val.score);
+                    }
                     board.undoMove();
 
                     if (val.score > beta) {
                         ret_val = val;
+                        prune = true;
                     } else if (val.score > alpha) {
                         alpha = val.score;
                         ret_val = val;
                         ret_val.move = moves[i];
                     }
                 }
-                //if (ret_val === undefined) {
-                //    ret_val = alpha;
-                //}
+                if (ret_val === undefined) {
+                    ret_val = { score: alpha };
+                }
             }
 
             //ret_val = { move: best_move, score: best_score };
@@ -378,9 +384,6 @@ var ns = (function () {
                             }
                         }
                     }
-                    //if (depth === max_depth) {
-                    //    //Trace("My move:" + moves.myMoves[i] + " score: " + oppBestScore);
-                    //}
                     if (oppBestScore > best_score) {
                         best_score = oppBestScore;
                         best_move = moves.myMoves[i];
@@ -405,9 +408,7 @@ var ns = (function () {
         nodeCheckThreshold = 10000;
         time_is_up = false;
         bestMove = {};
-        Board.processMove(EAST);
-        Board.undoMove();
-        move = negamax(board, 2, -99999, 99999, MY, startTime, 1000);
+        move = negamax(board, 4, -99999, 99999, 1, startTime, 10000);
         //while (!exitNow) {
         //    trace("Searching " + currentDepth);
         //    move = negamax(board, currentDepth, -99999, 99999, MY, startTime, 1000);
