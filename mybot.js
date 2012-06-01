@@ -14,44 +14,101 @@
  *
  * Shared Take Start:
  *   Record fruit type, amount as 0.5, add 0.5 to player A, set pending take, leave on board
- *   
+ *
  * Shared Take Complete:
- *   Record fruit type, amount as 0.5, add 0.5 to player B, remove from board 
+ *   Record fruit type, amount as 0.5, add 0.5 to player B, remove from board
  *
  * Shared Take Declined
 
 
 
 */
-String.prototype.hashCode = function () {
-    "use strict";
-	var hash = 0;
-	if (this.length == 0) return hash;
-	for (i = 0; i < this.length; i++) {
-		char = this.charCodeAt(i);
-		hash = ((hash<<5)-hash)+char;
-		hash = hash & hash; // Convert to 32bit integer
+/**
+ * JS Implementation of MurmurHash3 (r136) (as of May 20, 2011)
+ *
+ * @author <a href="mailto:gary.court@gmail.com">Gary Court</a>
+ * @see http://github.com/garycourt/murmurhash-js
+ * @author <a href="mailto:aappleby@gmail.com">Austin Appleby</a>
+ * @see http://sites.google.com/site/murmurhash/
+ *
+ * @param {string} key ASCII only
+ * @param {number} seed Positive integer only
+ * @return {number} 32-bit positive integer hash
+ */
+
+function murmurhash3_32_gc(key, seed) {
+	var remainder, bytes, h1, h1b, c1, c1b, c2, c2b, k1, i;
+
+	remainder = key.length & 3; // key.length % 4
+	bytes = key.length - remainder;
+	h1 = seed;
+	c1 = 0xcc9e2d51;
+	c2 = 0x1b873593;
+	i = 0;
+
+	while (i < bytes) {
+	  	k1 =
+	  	  ((key.charCodeAt(i) & 0xff)) |
+	  	  ((key.charCodeAt(++i) & 0xff) << 8) |
+	  	  ((key.charCodeAt(++i) & 0xff) << 16) |
+	  	  ((key.charCodeAt(++i) & 0xff) << 24);
+		++i;
+
+		k1 = ((((k1 & 0xffff) * c1) + ((((k1 >>> 16) * c1) & 0xffff) << 16))) & 0xffffffff;
+		k1 = (k1 << 15) | (k1 >>> 17);
+		k1 = ((((k1 & 0xffff) * c2) + ((((k1 >>> 16) * c2) & 0xffff) << 16))) & 0xffffffff;
+
+		h1 ^= k1;
+        h1 = (h1 << 13) | (h1 >>> 19);
+		h1b = ((((h1 & 0xffff) * 5) + ((((h1 >>> 16) * 5) & 0xffff) << 16))) & 0xffffffff;
+		h1 = (((h1b & 0xffff) + 0x6b64) + ((((h1b >>> 16) + 0xe654) & 0xffff) << 16));
 	}
-	return hash;
+
+	k1 = 0;
+
+	switch (remainder) {
+		case 3: k1 ^= (key.charCodeAt(i + 2) & 0xff) << 16;
+		case 2: k1 ^= (key.charCodeAt(i + 1) & 0xff) << 8;
+		case 1: k1 ^= (key.charCodeAt(i) & 0xff);
+
+		k1 = (((k1 & 0xffff) * c1) + ((((k1 >>> 16) * c1) & 0xffff) << 16)) & 0xffffffff;
+		k1 = (k1 << 15) | (k1 >>> 17);
+		k1 = (((k1 & 0xffff) * c2) + ((((k1 >>> 16) * c2) & 0xffff) << 16)) & 0xffffffff;
+		h1 ^= k1;
+	}
+
+	h1 ^= key.length;
+
+	h1 ^= h1 >>> 16;
+	h1 = (((h1 & 0xffff) * 0x85ebca6b) + ((((h1 >>> 16) * 0x85ebca6b) & 0xffff) << 16)) & 0xffffffff;
+	h1 ^= h1 >>> 13;
+	h1 = ((((h1 & 0xffff) * 0xc2b2ae35) + ((((h1 >>> 16) * 0xc2b2ae35) & 0xffff) << 16))) & 0xffffffff;
+	h1 ^= h1 >>> 16;
+
+	return h1 >>> 0;
 }
 
 var ns = (function () {
     "use strict";
     var MY = 0, OPP = 1, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
         max_depth = 4, nodes_searched, nodeCheckThreshold, time_is_up = false, halfFruit, startTime, move_idx,
-        START = 0, COMPLETE = 1, SKIP = 2;
+        START = 0, COMPLETE = 1, SKIP = 2, moveTrans, moveHist, evalCache;
+
+    moveTrans = { NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W', TAKE: 'T', PASS: 'P' };
 
 
     Board = {
         init: function (start_board) {
             var i, j, x, y;
 
+            evalCache = {};
             // initialize board
             Board.board = [];
             Board.move_num = 0;
             Board.side = MY;
             Board.lastMove = {};
             Board.pendingTake = false;
+            Board.moveHist = "";
 
             for (i = 0; i < WIDTH; i += 1) {
                 Board.board[i] = [];
@@ -79,11 +136,12 @@ var ns = (function () {
             loc = Board.loc[Board.side];
             loc_other = Board.loc[1 - Board.side];
             undo = { loc: { x: loc.x, y: loc.y } };
+            Board.moveHist += moveTrans[move];
             /*
                 pendingTake: Board.pendingTake,
                 myCollected: Board.collected[MY].slice(0),
                 oppCollected: Board.collected[OPP].slice(0),
-                boardFruitChange: 
+                boardFruitChange:
             };*/
 
             if (move === TAKE) {
@@ -152,6 +210,7 @@ var ns = (function () {
                     Board.board[undo.loc.x][undo.loc.y] = undo.fruitType + 1;
                 }
             }
+            Board.moveHist = Board.moveHist.slice(0,-1);
 
             Board.side = other_side;
         },
@@ -205,6 +264,9 @@ var ns = (function () {
             s += "E+" + Board.loc[OPP].y;
 
             return s;
+        },
+        hash: function() {
+            return Board.moveHist;
         }
     };
 
@@ -296,6 +358,7 @@ var ns = (function () {
         var score, material, i, types, row, col, dx, dy, dist, min_dist, loc,
             myCats = 0, oppCats = 0, wonCats = [], cell, myCollected, oppCollected;
 
+
         nodes_searched += 1;
 
         myCollected = Board.collected[Board.side];
@@ -344,8 +407,13 @@ var ns = (function () {
         return score;
     }
 
-    function negamax(board, sd, depth, alpha, beta, side, startTime, maxTimeMS) {
+    function negamax(board, sd, depth, alpha, beta, moveOrder, startTime, maxTimeMS) {
         var ret_val, moves, i, j, val, best_move, best_score, prune, hash1, hash2, max;
+        var boardHash, cacheEval, moveList;
+
+        if(depth === sd) {
+            moveList = {};
+        }
 
         max = -9999;
         if (nodes_searched > nodeCheckThreshold) {
@@ -358,15 +426,33 @@ var ns = (function () {
 
         if (!time_is_up) {
             if (depth === 0) {
-                ret_val = { score: side * calc_score(board) };
+                ret_val = { score: calc_score(board) };
             } else {
                 prune = false;
                 moves = board.movegen();
+                //if(depth === sd && moveOrder !== undefined) {
+                //    moves = moveOrder;
+                //}
+
                 max = -9999;
                 for (i = 0; i < moves.length && !time_is_up && !prune; i += 1) {
                     //hash1 = board.key();
                     board.processMove(moves[i]);
-                    val = negamax(board, sd, depth - 1, -beta, -alpha, -side, startTime, maxTimeMS);
+                    /*
+                    boardHash = board.hash();
+                    cacheEval = evalCache[boardHash];
+
+                    if (cacheEval !== undefined &&
+                        cacheEval.depth >= depth - 1) {
+                        val = cacheEval.eval;
+                    } else {
+                        val = negamax(board, sd, depth - 1, -beta, -alpha, moveOrder, startTime, maxTimeMS);
+                        if (depth > 6) {
+                            evalCache[boardHash] = { eval:val, depth: depth - 1};
+                        }
+                    }*/
+                    val = negamax(board, sd, depth - 1, -beta, -alpha, moveOrder, startTime, maxTimeMS);
+
                     if (val !== undefined) {
                         val.score *= -1;
                         val.score -= 0.001 * (20 - depth);
@@ -377,15 +463,21 @@ var ns = (function () {
                     //    trace("My move:" + moves[i] + " score: " + val.score);
                     //}
                     board.undoMove();
+
+                    if (depth === sd) {
+                        moveList[moves[i]] = val.score;
+                    }
                     //hash2 = board.key();
                     //if(hash1 !== hash2) {
                     //    alert('Undo error');
                     //}
 
+
                     if (val.score > max) {
                         max = val.score;
                         ret_val = { score: max, move: moves[i] };
                     }
+
                     if (val.score > alpha) {
                         alpha = val.score;
                     }
@@ -394,9 +486,14 @@ var ns = (function () {
                         ret_val.score = alpha;
                         prune = true;
                     }
+
                 }
                 if (ret_val === undefined) {
                     ret_val = { score: max };
+                }
+
+                if (depth === sd) {
+                    ret_val.moveList = moveList;
                 }
             }
 
@@ -413,24 +510,26 @@ var ns = (function () {
 
     function search_mgr(board, startDepth) {
         var currentDepth = startDepth, startTime = new Date(),
-            move, bestMove, exitNow = false;
+            move, moveList, bestMove, exitNow = false;
 
         nodes_searched = 0;
         nodeCheckThreshold = 10000;
         time_is_up = false;
         bestMove = {};
+
         //move = negamax(board, 4, -99999, 99999, 1, startTime, 10000);
         while (!exitNow) {
             trace("Searching " + currentDepth);
-            move = negamax(board, currentDepth, currentDepth, -99999, 99999, 1, startTime, 9500);
+            move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, 8500);
             if (move !== undefined) {
                 bestMove = move;
                 trace("Best move: " + move.move);
+                //moveList = move.moveList
             } else {
                 exitNow = true;
             }
 
-            currentDepth += 2;
+            currentDepth += 1;
         }
 
         return bestMove;
@@ -479,7 +578,7 @@ var ns = (function () {
 
         nodes_searched = 0;
         startTime = new Date();
-        move = search_mgr(Board, 2);
+        move = search_mgr(Board, 4);
         trace(nodes_searched * 1000 / ((new Date()) - startTime));
 
         return move.move;
@@ -502,10 +601,16 @@ function new_game() {
     ns.new_game();
 }
 
-// Optionally include this function if you'd like to always reset to a 
+// Optionally include this function if you'd like to always reset to a
 // certain board number/layout. This is useful for repeatedly testing your
 // bot(s) against known positions.
 //
-//function default_board_number() {
-//    return 123;
-//}
+function default_board_number() {
+    //return 615808;
+    //80777
+    //764316
+    //return 456645;
+    //270909
+    //return 62749;
+    return 1;
+}

@@ -186,12 +186,12 @@ var Board = {
 // you an environment to develop and debug in.
 
 // don't rely on these constants to be the exact value listed here
-var EAST = 1;
-var NORTH = 2;
-var WEST = 3;
-var SOUTH = 4;
-var TAKE = 5;
-var PASS = 6;
+var EAST = "EAST";
+var NORTH = "NORTH";
+var WEST = "WEST";
+var SOUTH = "SOUTH";
+var TAKE = "TAKE";
+var PASS = "PASS";
 
 var HEIGHT;
 var WIDTH;
