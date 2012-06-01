@@ -6,12 +6,40 @@
  * Rewrite as a alternating move system to support negamax
  * Return best move found from interrupted searches
  * Proper alpha-beta pruning
- */
+ *
+ * Clean take:
+ *   Record fruit type, amount as 1.0, add 1.0 to player, remove from board
+ * Clean undo:
+ *   Subtract 1.0 from player, add to board
+ *
+ * Shared Take Start:
+ *   Record fruit type, amount as 0.5, add 0.5 to player A, set pending take, leave on board
+ *   
+ * Shared Take Complete:
+ *   Record fruit type, amount as 0.5, add 0.5 to player B, remove from board 
+ *
+ * Shared Take Declined
+
+
+
+*/
+String.prototype.hashCode = function () {
+    "use strict";
+	var hash = 0;
+	if (this.length == 0) return hash;
+	for (i = 0; i < this.length; i++) {
+		char = this.charCodeAt(i);
+		hash = ((hash<<5)-hash)+char;
+		hash = hash & hash; // Convert to 32bit integer
+	}
+	return hash;
+}
 
 var ns = (function () {
     "use strict";
     var MY = 0, OPP = 1, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
-        max_depth = 4, nodes_searched, nodeCheckThreshold, time_is_up = false, halfFruit, startTime;
+        max_depth = 4, nodes_searched, nodeCheckThreshold, time_is_up = false, halfFruit, startTime, move_idx,
+        START = 0, COMPLETE = 1, SKIP = 2;
 
 
     Board = {
@@ -51,32 +79,38 @@ var ns = (function () {
             loc = Board.loc[Board.side];
             loc_other = Board.loc[1 - Board.side];
             undo = { loc: { x: loc.x, y: loc.y } };
+            /*
+                pendingTake: Board.pendingTake,
+                myCollected: Board.collected[MY].slice(0),
+                oppCollected: Board.collected[OPP].slice(0),
+                boardFruitChange: 
+            };*/
 
             if (move === TAKE) {
+                fruitType = Board.board[loc.x][loc.y] - 1;
+                undo.fruitType = fruitType;
                 if (!Board.pendingTake) {
                     if (loc.x === loc_other.x && loc.y === loc_other.y) {
-                        amt = 0.5;
+                        Board.collected[Board.side][fruitType] += 0.5;
                         Board.pendingTake = true;
+                        undo.sharedTake = START;
                     } else {
-                        amt = 1;
+                        Board.collected[Board.side][fruitType] += 1;
+                        Board.board[loc.x][loc.y] = 0;
                     }
-                    fruitType = Board.board[loc.x][loc.y] - 1;
-                    Board.collected[Board.side][fruitType] += amt;
-                    Board.board[loc.x][loc.y] -= amt;
-                    undo.fruitChange = { fruitType: fruitType, amt: amt };
                 } else {
-                    fruitType = Board.board[loc.x][loc.y] - 0.5; // Because we already took half the fruit so the type if FUBAR
                     Board.collected[Board.side][fruitType] += 0.5;
                     Board.board[loc.x][loc.y] = 0;
-                    undo.fruitChange = { fruitType: fruitType, amt: 0.5, doubleTake: true };
                     Board.pendingTake = false;
+                    undo.sharedTake = COMPLETE;
                 }
             } else {
                 if (move !== TAKE && Board.pendingTake) {
                     fruitType = Board.board[loc.x][loc.y] - 1;
                     Board.collected[1 - Board.side][fruitType] += 0.5;
                     Board.board[loc.x][loc.y] = 0;
-                    undo.fruitChange = { fruitType: fruitType, amt: 0.5 };
+                    undo.fruitType = fruitType;
+                    undo.sharedTake = SKIP;
                 } else if (move === NORTH) {
                     Board.loc[Board.side].y -= 1;
                 } else if (move === SOUTH) {
@@ -99,15 +133,26 @@ var ns = (function () {
             Board.move_num -= 1;
             Board.loc[other_side] = undo.loc;
 
-            if (undo.fruitChange !== undefined) {
-                if (undo.fruitChange.doubleTake) {
-                    Board.collected[other_side][undo.fruitChange.fruitType] -= undo.fruitChange.amt;
-                    Board.board[undo.loc.x][undo.loc.y] += undo.fruitChange.amt;
+            if (undo.fruitType !== undefined) {
+                if (undo.sharedTake !== undefined) {
+                    if (Board.pendingTake) {
+                        Board.collected[other_side][undo.fruitType] -= 0.5;
+                        Board.pendingTake = false;
+                    } else if (undo.sharedTake === COMPLETE) {
+                        Board.collected[other_side][undo.fruitType] -= 0.5;
+                        Board.board[undo.loc.x][undo.loc.y] = undo.fruitType + 1;
+                        Board.pendingTake = true;
+                    } else {
+                        Board.collected[Board.side][undo.fruitType] -= 0.5;
+                        Board.board[undo.loc.x][undo.loc.y] = undo.fruitType + 1;
+                        Board.pendingTake = true;
+                    }
                 } else {
-                    Board.collected[other_side][undo.fruitChange.fruitType] -= undo.fruitChange.amt;
-                    Board.board[undo.loc.x][undo.loc.y] += undo.fruitChange.amt;
+                    Board.collected[other_side][undo.fruitType] -= 1;
+                    Board.board[undo.loc.x][undo.loc.y] = undo.fruitType + 1;
                 }
             }
+
             Board.side = other_side;
         },
 
@@ -140,6 +185,26 @@ var ns = (function () {
             moves = gen(Board.loc[Board.side]);
 
             return moves;
+        },
+        key: function () {
+            var i, j, s="";
+
+            for (i=0; i < num_item_types; i++) {
+                s += "A+" + Board.collected[MY][i].toString();
+                s += "B+" + Board.collected[OPP][i].toString();
+            }
+            for (i=0; i < WIDTH; i++) {
+                for (j=0; j < HEIGHT; j++) {
+                    s += "C+" + Board.board[i][j].toString();
+                }
+            }
+
+            s += "D+" + Board.loc[MY].x;
+            s += "D+" + Board.loc[MY].y;
+            s += "E+" + Board.loc[OPP].x;
+            s += "E+" + Board.loc[OPP].y;
+
+            return s;
         }
     };
 
@@ -279,9 +344,10 @@ var ns = (function () {
         return score;
     }
 
-    function negamax(board, depth, alpha, beta, side, startTime, maxTimeMS) {
-        var ret_val, moves, i, j, val, best_move, best_score, prune;
+    function negamax(board, sd, depth, alpha, beta, side, startTime, maxTimeMS) {
+        var ret_val, moves, i, j, val, best_move, best_score, prune, hash1, hash2, max;
 
+        max = -9999;
         if (nodes_searched > nodeCheckThreshold) {
             if ((new Date()) - startTime > maxTimeMS) {
                 time_is_up = true;
@@ -296,27 +362,41 @@ var ns = (function () {
             } else {
                 prune = false;
                 moves = board.movegen();
-
+                max = -9999;
                 for (i = 0; i < moves.length && !time_is_up && !prune; i += 1) {
+                    //hash1 = board.key();
                     board.processMove(moves[i]);
-                    val = negamax(board, depth - 1, -beta, -alpha, -side, startTime, maxTimeMS);
-                    val.score *= -1;
-                    if (depth === 4) {
-                        trace("My move:" + moves[i] + " score: " + val.score);
+                    val = negamax(board, sd, depth - 1, -beta, -alpha, -side, startTime, maxTimeMS);
+                    if (val !== undefined) {
+                        val.score *= -1;
+                        val.score -= 0.001 * (20 - depth);
+                    } else {
+                        break;
                     }
+                    //if (depth === sd) {
+                    //    trace("My move:" + moves[i] + " score: " + val.score);
+                    //}
                     board.undoMove();
+                    //hash2 = board.key();
+                    //if(hash1 !== hash2) {
+                    //    alert('Undo error');
+                    //}
 
-                    if (val.score > beta) {
-                        ret_val = val;
-                        prune = true;
-                    } else if (val.score > alpha) {
+                    if (val.score > max) {
+                        max = val.score;
+                        ret_val = { score: max, move: moves[i] };
+                    }
+                    if (val.score > alpha) {
                         alpha = val.score;
-                        ret_val = val;
-                        ret_val.move = moves[i];
+                    }
+
+                    if (alpha >= beta) {
+                        ret_val.score = alpha;
+                        prune = true;
                     }
                 }
                 if (ret_val === undefined) {
-                    ret_val = { score: alpha };
+                    ret_val = { score: max };
                 }
             }
 
@@ -331,75 +411,6 @@ var ns = (function () {
     }
 
 
-/*
-            function negamax(node, depth, α, β, color)
-    if node is a terminal node or depth = 0
-        return color * the heuristic value of node
-    else
-        foreach child of node
-            val := -negamax(child, depth-1, -β, -α, -color)
-            {the following if statement constitutes alpha-beta pruning}
-            if val≥β
-                return val
-            if val≥α
-                α:=val
-        return α
-*/
-    function search(board, depth, startTime, maxTimeMS) {
-        var score, board_score, moves, myMove, oppMove, i, j,
-            best_move, best_score, ret_val, oppBestScore, prune, move;
-
-        best_score = -99999;
-        if (nodes_searched > nodeCheckThreshold) {
-            if ((new Date()) - startTime > maxTimeMS) {
-                time_is_up = true;
-            } else {
-                nodeCheckThreshold = nodes_searched + 10000;
-            }
-        }
-
-
-
-        if (!time_is_up) {
-            if (depth === 0) {
-                ret_val = { score: calc_score(board) };
-            } else {
-                moves = board.movegen();
-
-                for (i = 0; i < moves.myMoves.length && !time_is_up; i += 1) {
-                    oppBestScore = 99999;
-                    prune = false;
-                    for (j = 0; j < moves.oppMoves.length && !prune && !time_is_up; j += 1) {
-                        board.processMove(moves.myMoves[i], moves.oppMoves[j]);
-                        move = search(board, depth - 1, startTime, maxTimeMS);
-                        board.undoMove();
-                        //Trace("Opp move  d:" + depth + " move:" + moves.oppMoves[j] + " score:" + board_score);
-
-                        if (move !== undefined) {
-                            board_score = move.score;
-                            oppBestScore = Math.min(oppBestScore, board_score);
-
-                            if (oppBestScore < best_score) {
-                                prune = true;
-                            }
-                        }
-                    }
-                    if (oppBestScore > best_score) {
-                        best_score = oppBestScore;
-                        best_move = moves.myMoves[i];
-                    }
-
-                }
-
-                ret_val = { move: best_move, score: best_score };
-            }
-        }
-        if (time_is_up) {
-            ret_val = undefined;
-        }
-        return ret_val;
-    }
-
     function search_mgr(board, startDepth) {
         var currentDepth = startDepth, startTime = new Date(),
             move, bestMove, exitNow = false;
@@ -408,26 +419,49 @@ var ns = (function () {
         nodeCheckThreshold = 10000;
         time_is_up = false;
         bestMove = {};
-        move = negamax(board, 4, -99999, 99999, 1, startTime, 10000);
-        //while (!exitNow) {
-        //    trace("Searching " + currentDepth);
-        //    move = negamax(board, currentDepth, -99999, 99999, MY, startTime, 1000);
-        //    if (move !== undefined) {
-        //        bestMove = move;
-        //    } else {
-        //        exitNow = true;
-        //    }
+        //move = negamax(board, 4, -99999, 99999, 1, startTime, 10000);
+        while (!exitNow) {
+            trace("Searching " + currentDepth);
+            move = negamax(board, currentDepth, currentDepth, -99999, 99999, 1, startTime, 9500);
+            if (move !== undefined) {
+                bestMove = move;
+                trace("Best move: " + move.move);
+            } else {
+                exitNow = true;
+            }
 
-        //    currentDepth += 1;
-        //}
+            currentDepth += 2;
+        }
 
-        return move;
+        return bestMove;
 
     }
 
     function new_game() {
+        var col, row, moves;
+
         num_cells = WIDTH * HEIGHT;
         num_item_types = get_number_of_item_types();
+
+        move_idx = [];
+        for (col = 0; col < WIDTH; col += 1) {
+            moves = [];
+            move_idx[col] = moves;
+            for (row = 0; row < HEIGHT; row += 1) {
+                if (col > 0) {
+                    moves.push(WEST);
+                }
+                if (col < WIDTH - 1) {
+                    moves.push(EAST);
+                }
+                if (row > 0) {
+                    moves.push(NORTH);
+                }
+                if (row < HEIGHT - 1) {
+                    moves.push(SOUTH);
+                }
+            }
+        }
     }
 
     function make_move() {
