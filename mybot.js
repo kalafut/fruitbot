@@ -36,6 +36,15 @@
  * @return {number} 32-bit positive integer hash
  */
 
+var debug = 0;
+
+function dbg_trace(s) {
+    if (debug) {
+        trace(s);
+    }
+}
+
+
 function murmurhash3_32_gc(key, seed) {
 	var remainder, bytes, h1, h1b, c1, c1b, c2, c2b, k1, i;
 
@@ -122,9 +131,18 @@ var ns = (function () {
     "use strict";
     var MY = 0, OPP = 1, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
         max_depth = 4, nodes_searched, nodeCheckThreshold, time_is_up = false, halfFruit, startTime, move_idx,
-        START = 0, COMPLETE = 1, SKIP = 2, moveTrans, moveHist, evalCache;
+        START = 0, COMPLETE = 1, SKIP = 2, moveTrans, moveHist, evalCache, xlat;
 
     moveTrans = { NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W', TAKE: 'T', PASS: 'P' };
+
+    xlat = {
+        EAST: "EAST",
+        NORTH: "NORTH",
+        WEST: "WEST",
+        SOUTH: "SOUTH",
+        TAKE: "TAKE",
+        PASS: "PASS"
+    };
 
 
     Board = {
@@ -407,6 +425,12 @@ var ns = (function () {
             }
         }
 
+        if (myCats > num_item_types / 2) {
+            return Infinity;
+        } else if (oppCats > num_item_types / 2) {
+            return -Infinity;
+        }
+
         minDist = { my: 9999, opp: 9999 };
         for (row = 0; row < HEIGHT; row += 1) {
             for (col = 0; col < WIDTH; col += 1) {
@@ -501,7 +525,8 @@ var ns = (function () {
                         break;
                     }
                     if (depth === sd) {
-                        trace("My move:" + moves[i] + " score: " + val.score);
+                        moveList[moves[i]] = val.score;
+                        dbg_trace("My move:" + moves[i] + " score: " + val.score);
                     }
                     board.undoMove();
 
@@ -531,7 +556,7 @@ var ns = (function () {
                 }
                 if (ret_val === undefined) {
                     ret_val = { score: max };
-                }
+                    }
 
                 if (depth === sd) {
                     ret_val.moveList = moveList;
@@ -550,7 +575,7 @@ var ns = (function () {
 
 
     function search_mgr(board, startDepth) {
-        var currentDepth = startDepth, startTime = new Date(),
+        var currentDepth = startDepth,
             move, moveList, bestMove, exitNow = false;
 
         nodes_searched = 0;
@@ -560,11 +585,11 @@ var ns = (function () {
 
         //move = negamax(board, 4, -99999, 99999, 1, startTime, 10000);
         while (!exitNow) {
-            trace("Searching " + currentDepth);
+            dbg_trace("Searching " + currentDepth);
             move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, 8000);
             if (move !== undefined) {
                 bestMove = move;
-                trace("Best move: " + move.move);
+                dbg_trace("Best move: " + move.move);
                 //moveList = move.moveList
             } else {
                 exitNow = true;
@@ -572,6 +597,10 @@ var ns = (function () {
 
             currentDepth += 1;
         }
+        for(move in bestMove.moveList) {
+            trace("Move: " + move.toString() + "  Score: " + bestMove.moveList[move]);
+        }
+        trace((currentDepth - 1).toString() + " ply / " + nodes_searched.toString() + " nodes / " +(((new Date()) - startTime)/1000).toString() + "s" );
 
         return bestMove;
 
