@@ -88,6 +88,36 @@ function murmurhash3_32_gc(key, seed) {
 	return h1 >>> 0;
 }
 
+var testBoard1 = { board: [
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0] ],
+    history: [
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0] ],
+    numberOfItemTypes: 3,
+    totalItems: [1, 3, 5],
+    myBotCollected: [0.5, 1, 1,5],
+    simpleBotCollected: [0.5, 1, 1,5],
+    myX: 5,
+    myY: 1,
+    oppX: 5,
+    oppY: 1,
+    initial_state: {}
+};
+
 var ns = (function () {
     "use strict";
     var MY = 0, OPP = 1, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
@@ -355,7 +385,7 @@ var ns = (function () {
     }
 
     function calc_score(board) {
-        var score, material, i, types, row, col, dx, dy, dist, min_dist, loc,
+        var score, material, i, types, row, col, dx, dy, dist, minDist, myLoc, oppLoc,
             myCats = 0, oppCats = 0, wonCats = [], cell, myCollected, oppCollected;
 
 
@@ -363,7 +393,8 @@ var ns = (function () {
 
         myCollected = Board.collected[Board.side];
         oppCollected = Board.collected[1 - Board.side];
-        loc = Board.loc[Board.side];
+        myLoc = Board.loc[Board.side];
+        oppLoc = Board.loc[1 - Board.side];
 
         // First award categories won
         for (i = 0; i < num_item_types; i += 1) {
@@ -376,23 +407,33 @@ var ns = (function () {
             }
         }
 
-        min_dist = 9999;
+        minDist = { my: 9999, opp: 9999 };
         for (row = 0; row < HEIGHT; row += 1) {
             for (col = 0; col < WIDTH; col += 1) {
                 cell = board.board[col][row];
                 if (cell > 0 && wonCats.indexOf(cell - 1) === -1) {
-                    dx = col - loc.x;
-                    dy = row - loc.y;
+                    dx = col - myLoc.x;
+                    dy = row - myLoc.y;
                     dist = Math.abs(dx) + Math.abs(dy);
 
-                    if (dist < min_dist) {
-                        min_dist = dist;
+                    if (dist < minDist.my) {
+                        minDist.my = dist;
+                    }
+                    dx = col - oppLoc.x;
+                    dy = row - oppLoc.y;
+                    dist = Math.abs(dx) + Math.abs(dy);
+
+                    if (dist < minDist.opp) {
+                        minDist.opp = dist;
                     }
                 }
             }
         }
-        if (min_dist === 9999) {
-            min_dist = 0;
+        if (minDist.my === 9999) {
+            minDist.my = 0;
+        }
+        if (minDist.opp === 9999) {
+            minDist.opp = 0;
         }
 
         material = 0;
@@ -402,7 +443,7 @@ var ns = (function () {
             }
         }
 
-        score = 5 * (myCats - oppCats) + material - 0.01 * min_dist;
+        score = 5 * (myCats - oppCats) + material - 0.05 * (minDist.my - minDist.opp);
 
         return score;
     }
@@ -420,7 +461,7 @@ var ns = (function () {
             if ((new Date()) - startTime > maxTimeMS) {
                 time_is_up = true;
             } else {
-                nodeCheckThreshold = nodes_searched + 10000;
+                nodeCheckThreshold = nodes_searched + 2000;
             }
         }
 
@@ -459,9 +500,9 @@ var ns = (function () {
                     } else {
                         break;
                     }
-                    //if (depth === sd) {
-                    //    trace("My move:" + moves[i] + " score: " + val.score);
-                    //}
+                    if (depth === sd) {
+                        trace("My move:" + moves[i] + " score: " + val.score);
+                    }
                     board.undoMove();
 
                     if (depth === sd) {
@@ -520,7 +561,7 @@ var ns = (function () {
         //move = negamax(board, 4, -99999, 99999, 1, startTime, 10000);
         while (!exitNow) {
             trace("Searching " + currentDepth);
-            move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, 8500);
+            move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, 8000);
             if (move !== undefined) {
                 bestMove = move;
                 trace("Best move: " + move.move);
@@ -566,6 +607,8 @@ var ns = (function () {
     function make_move() {
         var board, min_dist, best_move, fruit_goal, i, move, start;
 
+        startTime = new Date();
+
         halfFruit = [];
         for (i = 0; i < num_item_types; i += 1) {
             halfFruit[i] = get_total_item_count(i + 1) / 2;
@@ -577,7 +620,6 @@ var ns = (function () {
 
 
         nodes_searched = 0;
-        startTime = new Date();
         move = search_mgr(Board, 4);
         trace(nodes_searched * 1000 / ((new Date()) - startTime));
 
@@ -612,5 +654,6 @@ function default_board_number() {
     //return 456645;
     //270909
     //return 62749;
-    return 1;
+    return 165134;
 }
+
