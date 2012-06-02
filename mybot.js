@@ -36,7 +36,7 @@
  * @return {number} 32-bit positive integer hash
  */
 
-var debug = 0;
+var debug = 1;
 
 function dbg_trace(s) {
     if (debug) {
@@ -135,14 +135,13 @@ var ns = (function () {
 
     moveTrans = { NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W', TAKE: 'T', PASS: 'P' };
 
-    xlat = {
-        EAST: "EAST",
-        NORTH: "NORTH",
-        WEST: "WEST",
-        SOUTH: "SOUTH",
-        TAKE: "TAKE",
-        PASS: "PASS"
-    };
+    xlat = [];
+    xlat[EAST] = "EAST";
+    xlat[NORTH] = "NORTH";
+    xlat[WEST] = "WEST";
+    xlat[SOUTH] = "SOUTH";
+    xlat[TAKE] = "TAKE";
+    xlat[PASS] = "PASS";
 
 
     Board = {
@@ -364,26 +363,6 @@ var ns = (function () {
                     ty += force * Math.sin(theta);
                     vector.r = Math.sqrt(Math.pow(tx, 2) + Math.pow(ty, 2));
                     vector.theta = Math.atan2(ty, tx);
-
-                    /*
-                       if(dist < min_dist) {
-                       min_dist = dist;
-                       if(Math.abs(dx) >= Math.abs(dy)) {
-                    // Go EAST or WEST
-                    if(dx > 0) {
-                    best_move = EAST;
-                    } else {
-                    best_move = WEST;
-                    }
-                    } else {
-                    if(dy > 0) {
-                    best_move = SOUTH;
-                    } else {
-                    best_move = NORTH;
-                    }
-                    }
-                    }
-                    */
                 }
             }
         }
@@ -405,7 +384,10 @@ var ns = (function () {
     function calc_score(board) {
         var score, material, i, types, row, col, dx, dy, dist, minDist, myLoc, oppLoc,
             myCats = 0, oppCats = 0, wonCats = [], cell, myCollected, oppCollected;
-
+        var points = {
+            win: Infinity,
+            lose: -Infinity
+        };
 
         nodes_searched += 1;
 
@@ -426,9 +408,9 @@ var ns = (function () {
         }
 
         if (myCats > num_item_types / 2) {
-            return Infinity;
+            return points.win;
         } else if (oppCats > num_item_types / 2) {
-            return -Infinity;
+            return points.lose;
         }
 
         minDist = { my: 9999, opp: 9999 };
@@ -473,14 +455,16 @@ var ns = (function () {
     }
 
     function negamax(board, sd, depth, alpha, beta, moveOrder, startTime, maxTimeMS) {
-        var ret_val, moves, i, j, val, best_move, best_score, prune, hash1, hash2, max;
+        var ret_val, moves, i, j, val, best_move, best_line, best_score, prune, hash1, hash2, max;
         var boardHash, cacheEval, moveList;
+
 
         if(depth === sd) {
             moveList = {};
         }
 
-        max = -9999;
+        max = -Infinity;
+        best_line = [];
         if (nodes_searched > nodeCheckThreshold) {
             if ((new Date()) - startTime > maxTimeMS) {
                 time_is_up = true;
@@ -491,15 +475,15 @@ var ns = (function () {
 
         if (!time_is_up) {
             if (depth === 0) {
-                ret_val = { score: calc_score(board) };
+                max = calc_score(board);
             } else {
                 prune = false;
                 moves = board.movegen();
+                best_move = moves[0];
                 //if(depth === sd && moveOrder !== undefined) {
                 //    moves = moveOrder;
                 //}
 
-                max = -9999;
                 for (i = 0; i < moves.length && !time_is_up && !prune; i += 1) {
                     //hash1 = board.key();
                     board.processMove(moves[i]);
@@ -520,17 +504,13 @@ var ns = (function () {
 
                     if (val !== undefined) {
                         val.score *= -1;
-                        val.score -= 0.001 * (20 - depth);
+                        val.score -= 0.01 * (20 - depth);
                     } else {
                         break;
                     }
-                    if (depth === sd) {
-                        moveList[moves[i]] = val.score;
-                        dbg_trace("My move:" + moves[i] + " score: " + val.score);
-                    }
                     board.undoMove();
 
-                    if (depth === sd) {
+                    if (depth === sd) { 
                         moveList[moves[i]] = val.score;
                     }
                     //hash2 = board.key();
@@ -541,7 +521,9 @@ var ns = (function () {
 
                     if (val.score > max) {
                         max = val.score;
-                        ret_val = { score: max, move: moves[i] };
+                        best_move = moves[i];
+                        best_line = val.line;
+                        //ret_val = { score: max, move: moves[i], line: val.line };
                     }
 
                     if (val.score > alpha) {
@@ -549,21 +531,18 @@ var ns = (function () {
                     }
 
                     if (alpha >= beta) {
-                        ret_val.score = alpha;
+                        max = alpha;
                         prune = true;
                     }
 
                 }
-                if (ret_val === undefined) {
-                    ret_val = { score: max };
-                    }
-
-                if (depth === sd) {
-                    ret_val.moveList = moveList;
-                }
+                //if (ret_val === undefined) {
+                //    ret_val = { score: max };
+                //}
             }
 
-            //ret_val = { move: best_move, score: best_score };
+            best_line.unshift(best_move);
+            ret_val = { move: best_move, score: max, line: best_line, moveList: moveList };
         }
 
         if (time_is_up) {
@@ -586,10 +565,20 @@ var ns = (function () {
         //move = negamax(board, 4, -99999, 99999, 1, startTime, 10000);
         while (!exitNow) {
             dbg_trace("Searching " + currentDepth);
-            move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, 8000);
+            move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, 2000);
             if (move !== undefined) {
                 bestMove = move;
                 dbg_trace("Best move: " + move.move);
+                //dbg_trace(bestMove.line.toString());
+
+                if (bestMove.score == Infinity) {
+                    //win_line = bestMove.line;
+                    //win_line.shift();
+                    //win_line.shift();
+                    trace("Win in " + bestMove.line.length.toString());
+                    exitNow = true;
+                }
+
                 //moveList = move.moveList
             } else {
                 exitNow = true;
@@ -598,9 +587,10 @@ var ns = (function () {
             currentDepth += 1;
         }
         for(move in bestMove.moveList) {
-            trace("Move: " + move.toString() + "  Score: " + bestMove.moveList[move]);
+            trace("Move: " + xlat[move] + "  Score: " + bestMove.moveList[move]);
         }
         trace((currentDepth - 1).toString() + " ply / " + nodes_searched.toString() + " nodes / " +(((new Date()) - startTime)/1000).toString() + "s" );
+        //trace(bestMove.line.toString());
 
         return bestMove;
 
@@ -649,7 +639,7 @@ var ns = (function () {
 
 
         nodes_searched = 0;
-        move = search_mgr(Board, 4);
+        move = search_mgr(Board, 2);
         trace(nodes_searched * 1000 / ((new Date()) - startTime));
 
         return move.move;
@@ -683,6 +673,6 @@ function default_board_number() {
     //return 456645;
     //270909
     //return 62749;
-    return 165134;
+    //return 6;
 }
 
