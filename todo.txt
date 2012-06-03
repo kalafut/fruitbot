@@ -3,3 +3,4 @@
 - If I can't win, make a draw return as a win (somehow denoted differently
 though for the trace message... Maybe 1000000 vs. 20000000 or whatever. Test
 against 776106.
+Don't evaluate even numbered plys?
