@@ -123,7 +123,8 @@ var ns = (function () {
                     Board.board[loc.x][loc.y] = 0;
                     undo.fruitType = fruitType;
                     undo.sharedTake = SKIP;
-                } else if (move === NORTH) {
+                }
+                if (move === NORTH) {
                     Board.loc[Board.side].y -= 1;
                 } else if (move === SOUTH) {
                     Board.loc[Board.side].y += 1;
