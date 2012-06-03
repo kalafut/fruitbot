@@ -478,20 +478,22 @@ var ns = (function () {
         while (!exitNow) {
             dbg_trace("Searching " + currentDepth);
             move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, 8000);
+            //move = negamax(board, currentDepth, currentDepth, -99999, 99999, undefined, startTime, 8000);
             if (move !== undefined) {
                 bestMove = move;
                 dbg_trace("Best move: " + move.move);
                 //dbg_trace(bestMove.line.toString());
 
                 if (bestMove.score == Infinity) {
-                    //win_line = bestMove.line;
-                    //win_line.shift();
-                    //win_line.shift();
-                    trace("Win in " + bestMove.line.length.toString());
+                    trace("===Forced Win Found===");
                     exitNow = true;
                 }
 
-                //moveList = move.moveList
+                move.moveList.sort( function(a,b) { return ( a.score >= b.score ) ? -1 : 1; } );
+                moveList = [];
+                for (i = 0; i < move.moveList.length; i++) {
+                    moveList[i] = move.moveList[i].move;
+                }
             } else {
                 exitNow = true;
             }
@@ -578,12 +580,12 @@ function new_game() {
 // certain board number/layout. This is useful for repeatedly testing your
 // bot(s) against known positions.
 //
-//function default_board_number() {
-//    return 123;
-//}
+function default_board_number() {
+    return 347610;
+}
 
 function default_board_setup() {
-    return b757429_18();
+    return b775902_2();
 }
 
 function b757429_18() {
@@ -631,3 +633,47 @@ function b757429_18() {
     return setup;
 }
 
+function b775902_2() {
+    var setup = {
+        width: 12,
+        height: 12,
+                //  Apple, Banana, Cherry, Me, Orange
+        myFruit:    [ 0,     0,      0,      0,     0 ],
+        oppFruit:   [ 0,     0,      1,      0,     0 ],
+        board: [
+            // 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
+            "+-----------------------------------------------------------+",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 1
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "| M |   |   |   |   | O | O |   |   |   |   |   |   |   |   |", // 2
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   | B |   |   |   |   |   |   |   |", // 3
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   | M |   | O |   |   |   |   |   |   |", // 4
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   | O |   |   |   |   |   |   |   |   |   |", // 5
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   | O |   | B |   |   | C |   |   |   | M |   |   |   |   |", // 6
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   | B |   |   |   |%O@|   |   |   | B |   |   |   |   |   |", // 7
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   | M |   |   |   |   |   |   |   |   |   |   |", // 8
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   | C |   |   |   | A | O |   |   |   |   |   |   |   |   |", // 9
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   | M | M |   |   |   |   |   |   |", // 10
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   | M |   | C |   | O | C | O |   |   |   |   |   |   |", // 11
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   | C |   |   |   |   |   |   |   |   |   |   |", // 12
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 13
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 14
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 15
+            "+-----------------------------------------------------------+" ]
+    };
+
+    return setup;
+}
