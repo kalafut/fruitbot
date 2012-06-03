@@ -30,37 +30,6 @@ function dbg_trace(s) {
     }
 }
 
-
-var testBoard1 = { board: [
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0] ],
-    history: [
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0] ],
-    numberOfItemTypes: 3,
-    totalItems: [1, 3, 5],
-    myBotCollected: [0.5, 1, 1,5],
-    simpleBotCollected: [0.5, 1, 1,5],
-    myX: 5,
-    myY: 1,
-    oppX: 5,
-    oppY: 1,
-    initial_state: {}
-};
-
 var ns = (function () {
     "use strict";
     var MY = 0, OPP = 1, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
@@ -129,7 +98,11 @@ var ns = (function () {
                 fruitType = Board.board[loc.x][loc.y] - 1;
                 undo.fruitType = fruitType;
                 if (!Board.pendingTake) {
-                    if (loc.x === loc_other.x && loc.y === loc_other.y) {
+                    // We only to the 0.5 take if it's side 0. If it is side 1 and the locations
+                    // are the same, it just means side 0 moved to that square as part of the same
+                    // turn, so side 1 is entitle to the full fruit. An artifact of splitting
+                    // simultaneous moves into turn based.
+                    if (loc.x === loc_other.x && loc.y === loc_other.y && Board.side === 0) {
                         Board.collected[Board.side][fruitType] += 0.5;
                         Board.pendingTake = true;
                         undo.sharedTake = START;
@@ -493,7 +466,7 @@ var ns = (function () {
 
 
     function search_mgr(board, startDepth) {
-        var currentDepth = startDepth,
+        var currentDepth = startDepth, i,
             move, moveList, bestMove, exitNow = false;
 
         nodes_searched = 0;
@@ -525,8 +498,8 @@ var ns = (function () {
 
             currentDepth += 1;
         }
-        for(move in bestMove.moveList) {
-            trace("Move: " + xlat[move] + "  Score: " + bestMove.moveList[move]);
+        for(i = 0; i < bestMove.moveList.length; i++) {
+            trace("Move: " + xlat[bestMove.moveList[i].move] + "  Score: " + bestMove.moveList[i].score);
         }
         trace((currentDepth - 1).toString() + " ply / " + nodes_searched.toString() + " nodes / " +(((new Date()) - startTime)/1000).toString() + "s" );
         //trace(bestMove.line.toString());
@@ -610,43 +583,48 @@ function new_game() {
 //}
 
 function default_board_setup() {
+    return b757429_18();
+}
+
+function b757429_18() {
     var setup = {
-        width: 9,
-        height: 9,
-                //  Apple, Banana, Cherry, Melon, Orange
-        myFruit:    [ 1,     0,      0,      0,     1 ],
-        oppFruit:   [ 2,     0,      0,      1,     0 ],
+        width: 13,
+        height: 13,
+                //  Apple, Banana, Cherry, Me, Orange
+        myFruit:    [ 0,     0,      1,      0,     0 ],
+        oppFruit:   [ 0,     0,      1,      0,     0 ],
         board: [
+            // 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
             "+-----------------------------------------------------------+",
-            "| A | B |   |   |   |   |   |   |   |   |   |   |   |   |   |",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 1
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   | C |   |   |   |   |   |   |   |   |   |   |   |   |",
+            "|   |   |   |   |   |   | C |   | B |   |   |   |   |   |   |", // 2
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   |   | M |   |   |   |   |   |   |   |   |   |   |   |",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 3
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   |   |   | O |   |   |   |   |   |   |   |   |   |   |",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 4
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   |   |   | O |   |   |   |   |   |   |   |   |   |   |",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 5
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |",
+            "| A | B@|   |   |   |   |   |   |   | C |   |   |   |   |   |", // 6
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   |   | % |   |   |   |   |   |   |   |   |   |   |   |",
+            "| % |   |   |   |   |   |   |   |   | B |   |   |   |   |   |", // 7
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   |   |   |   | @ |   |   |   |   |   |   |   |   |   |",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 8
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 9
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 10
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 11
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |",
+            "|   |   |   |   |   |   |   |   |   |   |   |   | C |   |   |", // 12
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 13
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 14
             "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
-            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 15
             "+-----------------------------------------------------------+" ]
     };
 
