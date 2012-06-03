@@ -412,7 +412,7 @@ var ns = (function () {
                             evalCache[boardHash] = { eval:val, depth: depth - 1};
                         }
                     }*/
-                    val = negamax(board, sd, depth - 1, -beta, -alpha, moveOrder, startTime, maxTimeMS);
+                    val = negamax(board, sd, depth - 1, -beta, -alpha, undefined, startTime, maxTimeMS);
 
                     if (val !== undefined) {
                         val.score *= -1;
