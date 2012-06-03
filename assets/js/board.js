@@ -1,62 +1,97 @@
 var Board = {
     init: function(boardNumber) {
-        var fullBoard;
+        var fullBoard, customSetup = false;
 
-        Board.initRandom(boardNumber);
+        if (typeof default_board_setup === 'function') {
+            setup = default_board_setup();
+            parsedSetup = Board.parseSetup(setup);
+            if (parsedSetup) {
+                WIDTH = parsedSetup.width;
+                HEIGHT = parsedSetup.height;
+                Board.numberOfItemTypes = parsedSetup.numberOfItemTypes;
+                Board.totalItems = parsedSetup.totalItems;
+                Board.myX = parsedSetup.myX;
+                Board.myY = parsedSetup.myY;
+                Board.oppX = parsedSetup.oppX;
+                Board.oppY = parsedSetup.oppY;
+                Board.myBotCollected = parsedSetup.myBotCollected;
+                Board.simpleBotCollected = parsedSetup.simpleBotCollected;
 
-        // initialize board
-        HEIGHT = Math.min(Math.floor(Board.random() * 11) + 5, 15);
-        WIDTH = Math.min(Math.floor(Board.random() * 11) + 5, 15);
+                Board.board = [];
+                for (var i=0; i<WIDTH; i++) {
+                    Board.board[i] = [];
+                    for (var j=0; j<HEIGHT; j++) {
+                        Board.board[i][j] = parsedSetup.board[j][i];
+                    }
+                }
+                Board.history = new Array(WIDTH);
 
-        Board.board = new Array(WIDTH);
-
-        for (var i=0; i<WIDTH; i++) {
-            Board.board[i] = new Array(HEIGHT);
-            for (var j=0; j<HEIGHT; j++) {
-                Board.board[i][j] = 0;
+                for (var i=0; i<WIDTH; i++) {
+                    Board.history[i] = new Array(HEIGHT);
+                    for (var j=0; j<HEIGHT; j++) {
+                        Board.history[i][j] = 0;
+                    }
+                }
+            customSetup = true;
             }
         }
+        if(!customSetup) {
+            Board.initRandom(boardNumber);
 
-        Board.history = new Array(WIDTH);
+            // initialize board
+            HEIGHT = Math.min(Math.floor(Board.random() * 11) + 5, 15);
+            WIDTH = Math.min(Math.floor(Board.random() * 11) + 5, 15);
 
-        for (var i=0; i<WIDTH; i++) {
-            Board.history[i] = new Array(HEIGHT);
-            for (var j=0; j<HEIGHT; j++) {
-                Board.history[i][j] = 0;
+            Board.board = new Array(WIDTH);
+
+            for (var i=0; i<WIDTH; i++) {
+                Board.board[i] = new Array(HEIGHT);
+                for (var j=0; j<HEIGHT; j++) {
+                    Board.board[i][j] = 0;
+                }
             }
-        }
 
-        // initialize items on board
-        do {
-            Board.numberOfItemTypes = Math.floor(Board.random() * 3 + 3);
-        } while(Board.numberOfItemTypes * Board.numberOfItemTypes >= HEIGHT * WIDTH)
-        Board.totalItems = new Array();
-        Board.simpleBotCollected = new Array(Board.numberOfItemTypes);
-        Board.myBotCollected = new Array(Board.numberOfItemTypes);
-        var x;
-        var y;
-        for (var i=0; i<Board.numberOfItemTypes; i++) {
-            Board.myBotCollected[i] = 0;
-            Board.simpleBotCollected[i] = 0;
-            Board.totalItems[i] = i * 2 + 1;
-            for (var j=0; j<Board.totalItems[i]; j++) {
-                do {
-                    x = Math.min(Math.floor(Board.random() * WIDTH), WIDTH);
-                    y = Math.min(Math.floor(Board.random() * HEIGHT), HEIGHT);
-                } while (Board.board[x][y] != 0);
-                Board.board[x][y] = i + 1;
+            Board.history = new Array(WIDTH);
+
+            for (var i=0; i<WIDTH; i++) {
+                Board.history[i] = new Array(HEIGHT);
+                for (var j=0; j<HEIGHT; j++) {
+                    Board.history[i][j] = 0;
+                }
             }
-        }
 
-        // get them the same starting position
-        do {
-            x = Math.min(Math.floor(Board.random() * WIDTH), WIDTH);
-            y = Math.min(Math.floor(Board.random() * HEIGHT), HEIGHT);
-        } while (Board.board[x][y] != 0);
-        Board.myX = x;
-        Board.myY = y;
-        Board.oppX = x;
-        Board.oppY = y;
+            // initialize items on board
+            do {
+                Board.numberOfItemTypes = Math.floor(Board.random() * 3 + 3);
+            } while(Board.numberOfItemTypes * Board.numberOfItemTypes >= HEIGHT * WIDTH)
+            Board.totalItems = new Array();
+            Board.simpleBotCollected = new Array(Board.numberOfItemTypes);
+            Board.myBotCollected = new Array(Board.numberOfItemTypes);
+            var x;
+            var y;
+            for (var i=0; i<Board.numberOfItemTypes; i++) {
+                Board.myBotCollected[i] = 0;
+                Board.simpleBotCollected[i] = 0;
+                Board.totalItems[i] = i * 2 + 1;
+                for (var j=0; j<Board.totalItems[i]; j++) {
+                    do {
+                        x = Math.min(Math.floor(Board.random() * WIDTH), WIDTH);
+                        y = Math.min(Math.floor(Board.random() * HEIGHT), HEIGHT);
+                    } while (Board.board[x][y] != 0);
+                    Board.board[x][y] = i + 1;
+                }
+            }
+
+            // get them the same starting position
+            do {
+                x = Math.min(Math.floor(Board.random() * WIDTH), WIDTH);
+                y = Math.min(Math.floor(Board.random() * HEIGHT), HEIGHT);
+            } while (Board.board[x][y] != 0);
+            Board.myX = x;
+            Board.myY = y;
+            Board.oppX = x;
+            Board.oppY = y;
+        }
         Board.initial_state = {};
         jQuery.extend(true, Board.initial_state, Board);
     },
@@ -172,7 +207,82 @@ var Board = {
         Math.random = Board.normalPRNG;
 
         return number;
+    },
+    parseSetup: function(setup) {
+        var parsedSetup = {},
+            fruit = { 'A':1, 'B':2, 'C':3, 'M':4, 'O':5 },
+            totalItems = [],
+            board = [],
+            i, j, f;
+
+        parsedSetup.numberOfItemTypes = 0;
+        try {
+            // Check dimensions
+            if ( (setup.width >= 5 && setup.width <= 15) && (setup.height >= 5 && setup.height <=15) ) {
+                parsedSetup.width = setup.width;
+                parsedSetup.height = setup.height;
+            } else {
+                return undefined;
+            }
+
+            // Check fruit
+            if (setup.myFruit.length == 5 && setup.oppFruit.length == 5) {
+                for (i = 0; i < 5; i++) {
+                    if (setup.myFruit[i] >= 0 && setup.myFruit[i] <= 9 && setup.oppFruit[i] >= 0 && setup.oppFruit[i] <= 9 ) {
+                        parsedSetup.myBotCollected = setup.myFruit;
+                        parsedSetup.simpleBotCollected = setup.oppFruit;
+                        if(setup.myFruit[i] > 0 || setup.oppFruit[i] > 0) {
+                            parsedSetup.numberOfItemTypes += 1;
+                            totalItems[i] = (totalItems[i] | 0) + setup.myFruit[i] + setup.oppFruit[i];
+                        }
+                    } else {
+                        return undefined;
+                    }
+                }
+            } else {
+                return undefined;
+            }
+
+            // parse board
+            if( setup.board.length !== 15*2 + 1 ) {
+                return undefined;
+            }
+
+            for (i = 1; i < setup.board.length; i += 2) {
+                cells = setup.board[i].split('|');
+                row = [];
+                for (j = 1; j < cells.length - 1; j++) {
+                    cell = cells[j];
+                    if (cell.indexOf('@') !== -1) {
+                        parsedSetup.myX = j - 1;
+                        parsedSetup.myY = (i - 1)/2;
+                    }
+                    if (cell.indexOf('%') !== -1) {
+                        parsedSetup.oppX = j - 1;
+                        parsedSetup.oppY = (i - 1)/2;
+                    }
+                    for (f in fruit) {
+                        if (cell.indexOf(f) !== -1) {
+                            row[j-1] = fruit[f];
+                            parsedSetup.numberOfItemTypes = Math.max(parsedSetup.numberOfItemTypes, fruit[f]);
+                            totalItems[fruit[f]-1] = (totalItems[fruit[f]-1] | 0) + 1;
+                            break;
+                        }
+                    }
+                    if (row[j-1] === undefined) {
+                        row[j-1] = 0;
+                    }
+                }
+                board.push(row);
+            }
+        } catch (e) {
+            return undefined
+        }
+        parsedSetup.totalItems = totalItems;
+        parsedSetup.board = board;
+        return parsedSetup;
     }
+
 }
 
 // Everything below is are API commands you can use.
@@ -234,3 +344,5 @@ function get_total_item_count(type) {
 function trace(mesg) {
     console.log(mesg);
 }
+
+
