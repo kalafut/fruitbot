@@ -34,7 +34,7 @@ var ns = (function () {
     "use strict";
     var MY = 0, OPP = 1, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
         max_depth = 4, nodes_searched, nodeCheckThreshold, time_is_up = false, halfFruit, startTime, move_idx,
-        START = 0, COMPLETE = 1, SKIP = 2, moveTrans, moveHist, evalCache, xlat,timeCheckDelay = 500;
+        START = 0, COMPLETE = 1, SKIP = 2, moveTrans, moveHist, evalCache, xlat,timeCheckDelay = 500, fruitValue;
 
     moveTrans = { NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W', TAKE: 'T', PASS: 'P' };
 
@@ -70,9 +70,9 @@ var ns = (function () {
             Board.history = [];
 
             Board.collected = [[], []];
-            for (i = 0; i < get_number_of_item_types(); i += 1) {
-                Board.collected[MY][i] = get_my_item_count(i + 1);
-                Board.collected[OPP][i] = get_opponent_item_count(i + 1);
+            for (i = 1; i <= num_item_types; i += 1) {
+                Board.collected[MY][i] = get_my_item_count(i);
+                Board.collected[OPP][i] = get_opponent_item_count(i);
             }
 
             Board.loc = [];
@@ -95,7 +95,7 @@ var ns = (function () {
             };*/
 
             if (move === TAKE) {
-                fruitType = Board.board[loc.x][loc.y] - 1;
+                fruitType = Board.board[loc.x][loc.y];
                 undo.fruitType = fruitType;
                 if (!Board.pendingTake) {
                     // We only to the 0.5 take if it's side 0. If it is side 1 and the locations
@@ -118,7 +118,7 @@ var ns = (function () {
                 }
             } else {
                 if (move !== TAKE && Board.pendingTake) {
-                    fruitType = Board.board[loc.x][loc.y] - 1;
+                    fruitType = Board.board[loc.x][loc.y];
                     Board.collected[1 - Board.side][fruitType] += 0.5;
                     Board.board[loc.x][loc.y] = 0;
                     undo.fruitType = fruitType;
@@ -153,16 +153,16 @@ var ns = (function () {
                         Board.pendingTake = false;
                     } else if (undo.sharedTake === COMPLETE) {
                         Board.collected[other_side][undo.fruitType] -= 0.5;
-                        Board.board[undo.loc.x][undo.loc.y] = undo.fruitType + 1;
+                        Board.board[undo.loc.x][undo.loc.y] = undo.fruitType;
                         Board.pendingTake = true;
                     } else {
                         Board.collected[Board.side][undo.fruitType] -= 0.5;
-                        Board.board[undo.loc.x][undo.loc.y] = undo.fruitType + 1;
+                        Board.board[undo.loc.x][undo.loc.y] = undo.fruitType;
                         Board.pendingTake = true;
                     }
                 } else {
                     Board.collected[other_side][undo.fruitType] -= 1;
-                    Board.board[undo.loc.x][undo.loc.y] = undo.fruitType + 1;
+                    Board.board[undo.loc.x][undo.loc.y] = undo.fruitType;
                 }
             }
             Board.moveHist = Board.moveHist.slice(0,-1);
@@ -203,7 +203,7 @@ var ns = (function () {
         key: function () {
             var i, j, s="";
 
-            for (i=0; i < num_item_types; i++) {
+            for (i=1; i <= num_item_types; i++) {
                 s += "A+" + Board.collected[MY][i].toString();
                 s += "B+" + Board.collected[OPP][i].toString();
             }
@@ -306,7 +306,7 @@ var ns = (function () {
         oppLoc = Board.loc[1 - Board.side];
 
         // First award categories won
-        for (i = 0; i < num_item_types; i += 1) {
+        for (i = 1; i <= num_item_types; i += 1) {
             if (myCollected[i] > halfFruit[i]) {
                 myCats += 1;
                 wonCats.push(i);
@@ -352,7 +352,7 @@ var ns = (function () {
         }
 
         material = 0;
-        for (i = 0; i < num_item_types; i += 1) {
+        for (i = 1; i <= num_item_types; i += 1) {
             if (wonCats.indexOf(i) === -1) {
                 material += myCollected[i] - oppCollected[i];
             }
@@ -538,22 +538,30 @@ var ns = (function () {
                 }
             }
         }
-    }
 
-    function make_move() {
-        var board, min_dist, best_move, fruit_goal, i, move, start;
-
-        startTime = new Date();
-
+        // Compute half fruit thresholds
         halfFruit = [];
-        for (i = 0; i < num_item_types; i += 1) {
+        for (i = 1; i <= num_item_types; i += 1) {
+            halfFruit[i] = get_total_item_count(i) / 2;
+        }
+
+        // Compute fruit values
+        fruitValue = {};
+
+        for (i = 1; i <= num_item_types; i += 1) {
             halfFruit[i] = get_total_item_count(i + 1) / 2;
         }
 
 
-        Board.init(get_board());
-        min_dist = 9e99;
 
+    }
+
+    function make_move() {
+        var board, best_move, fruit_goal, i, move, start;
+
+        startTime = new Date();
+
+        Board.init(get_board());
 
         nodes_searched = 0;
         move = search_mgr(Board, 2);
