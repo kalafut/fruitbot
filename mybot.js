@@ -34,7 +34,7 @@ var ns = (function () {
     "use strict";
     var MY = 0, OPP = 1, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
         max_depth = 4, nodes_searched, nodeCheckThreshold, time_is_up = false, halfFruit, startTime, move_idx,
-        START = 0, COMPLETE = 1, SKIP = 2, moveTrans, moveHist, evalCache, xlat;
+        START = 0, COMPLETE = 1, SKIP = 2, moveTrans, moveHist, evalCache, xlat,timeCheckDelay = 500;
 
     moveTrans = { NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W', TAKE: 'T', PASS: 'P' };
 
@@ -374,12 +374,14 @@ var ns = (function () {
 
         max = -Infinity;
         best_line = [];
-        if (nodes_searched > nodeCheckThreshold) {
+        if (timeCheckDelay < 0) {
             if ((new Date()) - startTime > maxTimeMS) {
                 time_is_up = true;
             } else {
-                nodeCheckThreshold = nodes_searched + 2000;
+                timeCheckDelay = 500;
             }
+        } else {
+            timeCheckDelay--;
         }
 
         if (!time_is_up) {
@@ -478,7 +480,7 @@ var ns = (function () {
         //move = negamax(board, 4, -99999, 99999, 1, startTime, 10000);
         while (!exitNow) {
             dbg_trace("Searching " + currentDepth);
-            move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, 8000);
+            move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, 9300);
             //move = negamax(board, currentDepth, currentDepth, -99999, 99999, undefined, startTime, 8000);
             if (move !== undefined) {
                 bestMove = move;
