@@ -21,8 +21,18 @@
  * Shared Take Declined
  */
 
+var on_server;
+var debug = 1;
 
-var debug = 0;
+try {
+    window;
+    on_server = false;
+    trace("local");
+} catch(e) {
+    on_server = true;
+    debug = false;
+    trace("server");
+}
 
 function dbg_trace(s) {
     if (debug) {
@@ -326,7 +336,7 @@ var ns = (function () {
         for (row = 0; row < HEIGHT; row += 1) {
             for (col = 0; col < WIDTH; col += 1) {
                 cell = board.board[col][row];
-                if (cell > 0 && wonCats.indexOf(cell - 1) === -1) {
+                if (cell > 0 && wonCats.indexOf(cell) === -1) {
                     dx = col - myLoc.x;
                     dy = row - myLoc.y;
                     dist = Math.abs(dx) + Math.abs(dy);
@@ -354,11 +364,11 @@ var ns = (function () {
         material = 0;
         for (i = 1; i <= num_item_types; i += 1) {
             if (wonCats.indexOf(i) === -1) {
-                material += myCollected[i] - oppCollected[i];
+                material += fruitValue[i] * (myCollected[i] - oppCollected[i]);
             }
         }
 
-        score = 5 * (myCats - oppCats) + material - 0.05 * (minDist.my - minDist.opp);
+        score = 500 * (myCats - oppCats) + material - 0.1 *  (minDist.my - minDist.opp);
 
         return score;
     }
@@ -480,7 +490,7 @@ var ns = (function () {
         //move = negamax(board, 4, -99999, 99999, 1, startTime, 10000);
         while (!exitNow) {
             dbg_trace("Searching " + currentDepth);
-            move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, 9300);
+            move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, on_server ? 9300 : 2000);
             //move = negamax(board, currentDepth, currentDepth, -99999, 99999, undefined, startTime, 8000);
             if (move !== undefined) {
                 bestMove = move;
@@ -514,7 +524,7 @@ var ns = (function () {
     }
 
     function new_game() {
-        var col, row, moves;
+        var col, row, moves, i;
 
         num_cells = WIDTH * HEIGHT;
         num_item_types = get_number_of_item_types();
@@ -549,10 +559,8 @@ var ns = (function () {
         fruitValue = {};
 
         for (i = 1; i <= num_item_types; i += 1) {
-            halfFruit[i] = get_total_item_count(i + 1) / 2;
+            fruitValue[i] = 100 / get_total_item_count(i);
         }
-
-
 
     }
 
