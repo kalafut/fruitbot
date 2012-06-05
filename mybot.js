@@ -22,7 +22,7 @@
  */
 
 var on_server;
-var debug = 1;
+var debug = 0;
 
 try {
     window;
@@ -300,8 +300,8 @@ var ns = (function () {
     }
 
     function calc_score(board) {
-        var score, material, i, types, row, col, dx, dy, dist, minDist, myLoc, oppLoc,
-            myCats = 0, oppCats = 0, wonCats = [], cell, myCollected, oppCollected;
+        var score, material, i, types, row, col, dx, dy, dist, minDist, myLoc, oppLoc, neededToWin, available, myPositionValue, oppPositionValue,
+            myCats = 0, oppCats = 0, wonCats = [], cell, myCollected, oppCollected, fruitValue = {};
         var points = {
             win: Infinity,
             lose: -Infinity
@@ -332,7 +332,25 @@ var ns = (function () {
             return points.lose;
         }
 
-        minDist = { my: 9999, opp: 9999 };
+        // Compute fruit values
+        for (i = 1; i <= num_item_types; i += 1) {
+            if( wonCats.indexOf(i) === -1 ) {
+                neededToWin = Math.ceil(halfFruit[i]) - myCollected[i];
+                available = get_total_item_count(i) - myCollected[i] - oppCollected[i];
+                if (available >= neededToWin) {
+                    fruitValue[i] = 100 / neededToWin;
+                } else {
+                    fruitValue[i] = 0;
+                }
+            } else {
+                fruitValue[i] = 0;
+            }
+        }
+
+        // Compute position value
+        //   100 / (dist + 1)
+        myPositionValue = 0;
+        oppPositionValue = 0;
         for (row = 0; row < HEIGHT; row += 1) {
             for (col = 0; col < WIDTH; col += 1) {
                 cell = board.board[col][row];
@@ -341,24 +359,15 @@ var ns = (function () {
                     dy = row - myLoc.y;
                     dist = Math.abs(dx) + Math.abs(dy);
 
-                    if (dist < minDist.my) {
-                        minDist.my = dist;
-                    }
+                    myPositionValue += fruitValue[cell] / (dist + 1);
+
                     dx = col - oppLoc.x;
                     dy = row - oppLoc.y;
                     dist = Math.abs(dx) + Math.abs(dy);
 
-                    if (dist < minDist.opp) {
-                        minDist.opp = dist;
-                    }
+                    oppPositionValue += fruitValue[cell] / (dist + 1);
                 }
             }
-        }
-        if (minDist.my === 9999) {
-            minDist.my = 0;
-        }
-        if (minDist.opp === 9999) {
-            minDist.opp = 0;
         }
 
         material = 0;
@@ -368,7 +377,7 @@ var ns = (function () {
             }
         }
 
-        score = 500 * (myCats - oppCats) + material - 0.1 *  (minDist.my - minDist.opp);
+        score = 500 * (myCats - oppCats) + material + 0.1 * (myPositionValue - oppPositionValue);
 
         return score;
     }
@@ -478,7 +487,7 @@ var ns = (function () {
     }
 
 
-    function search_mgr(board, startDepth) {
+    function search_mgr(board, startDepth, time) {
         var currentDepth = startDepth, i,
             move, moveList, bestMove, exitNow = false;
 
@@ -490,7 +499,7 @@ var ns = (function () {
         //move = negamax(board, 4, -99999, 99999, 1, startTime, 10000);
         while (!exitNow) {
             dbg_trace("Searching " + currentDepth);
-            move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, on_server ? 9300 : 2000);
+            move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, time);
             //move = negamax(board, currentDepth, currentDepth, -99999, 99999, undefined, startTime, 8000);
             if (move !== undefined) {
                 bestMove = move;
@@ -511,7 +520,7 @@ var ns = (function () {
                 exitNow = true;
             }
 
-            currentDepth += 1;
+            currentDepth += 2;
         }
         for(i = 0; i < bestMove.moveList.length; i++) {
             trace("Move: " + xlat[bestMove.moveList[i].move] + "  Score: " + bestMove.moveList[i].score);
@@ -554,17 +563,9 @@ var ns = (function () {
         for (i = 1; i <= num_item_types; i += 1) {
             halfFruit[i] = get_total_item_count(i) / 2;
         }
-
-        // Compute fruit values
-        fruitValue = {};
-
-        for (i = 1; i <= num_item_types; i += 1) {
-            fruitValue[i] = 100 / get_total_item_count(i);
-        }
-
     }
 
-    function make_move() {
+    function make_move(time) {
         var board, best_move, fruit_goal, i, move, start;
 
         startTime = new Date();
@@ -572,7 +573,7 @@ var ns = (function () {
         Board.init(get_board());
 
         nodes_searched = 0;
-        move = search_mgr(Board, 2);
+        move = search_mgr(Board, 2, time);
         trace(nodes_searched * 1000 / ((new Date()) - startTime));
 
         return move.move;
@@ -585,9 +586,12 @@ var ns = (function () {
 
 
 
-function make_move() {
+function make_move(time) {
     "use strict";
-    return ns.make_move();
+    if (time === undefined) {
+        time = on_server ? 9300 : 2000;
+    }
+    return ns.make_move(time);
 }
 
 function new_game() {
@@ -600,11 +604,11 @@ function new_game() {
 // bot(s) against known positions.
 //
 function default_board_number() {
-    return 347610;
+//    return 347610;
 }
 
 function default_board_setup() {
-    return b775902_2();
+//    return b775902_2();
 }
 
 function b757429_18() {
@@ -696,3 +700,4 @@ function b775902_2() {
 
     return setup;
 }
+
