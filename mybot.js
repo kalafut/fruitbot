@@ -589,7 +589,7 @@ var ns = (function () {
 function make_move(time) {
     "use strict";
     if (time === undefined) {
-        time = on_server ? 9300 : 2000;
+        time = on_server ? 9150 : 2000;
     }
     return ns.make_move(time);
 }
