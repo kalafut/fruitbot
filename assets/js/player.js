@@ -115,7 +115,8 @@ var GamePlay = {
                return;
            }
            Board.processMove();
-           setTimeout(function() {GamePlay.draw();}, 500);
+           //setTimeout(function() {GamePlay.draw();}, 500);
+           GamePlay.draw();
         } else {
            GamePlay.mode = "pause";
         }

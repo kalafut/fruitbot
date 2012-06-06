@@ -4,3 +4,7 @@
 though for the trace message... Maybe 1000000 vs. 20000000 or whatever. Test
 against 776106.
 Don't evaluate even numbered plys?
+- Especially in 4 fruit games, pick a 2nd fruit and win in. In
+  http://www.scribd.com/job_game/match/834824 he shouldn't have gone for
+  cherries at all
+

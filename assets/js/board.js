@@ -114,10 +114,11 @@ var Board = {
             new_game();
         }
         // SimpleBot currently doesn't need any sort of init, but if it did, it'd be called here too
+        B4.new_game();
     },
     processMove: function() {
         var myMove = make_move();
-        var simpleBotMove = SimpleBot.makeMove();
+        var simpleBotMove = B4.make_move();
         if ((Board.myX == Board.oppX) && (Board.myY == Board.oppY) && (myMove == TAKE) && (simpleBotMove == TAKE) && Board.board[Board.myX][Board.myY] > 0) {
             Board.myBotCollected[Board.board[Board.myX][Board.myY]-1] = Board.myBotCollected[Board.board[Board.myX][Board.myY]-1] + 0.5;
             Board.simpleBotCollected[Board.board[Board.oppX][Board.oppY]-1] = Board.simpleBotCollected[Board.board[Board.oppX][Board.oppY]-1] + 0.5;

@@ -22,7 +22,16 @@
  */
 
 
-var debug = 0;
+
+try {
+    window;
+    on_server = false;
+    trace("local");
+} catch(e) {
+    on_server = true;
+    debug = false;
+    trace("server");
+}
 
 function dbg_trace(s) {
     if (debug) {
@@ -30,7 +39,7 @@ function dbg_trace(s) {
     }
 }
 
-var ns = (function () {
+var ns_b4 = (function () {
     "use strict";
     var MY = 0, OPP = 1, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
         max_depth = 4, nodes_searched, nodeCheckThreshold, time_is_up = false, halfFruit, startTime, move_idx,
@@ -466,7 +475,7 @@ var ns = (function () {
     }
 
 
-    function search_mgr(board, startDepth) {
+    function search_mgr(board, startDepth, time) {
         var currentDepth = startDepth, i,
             move, moveList, bestMove, exitNow = false;
 
@@ -478,7 +487,7 @@ var ns = (function () {
         //move = negamax(board, 4, -99999, 99999, 1, startTime, 10000);
         while (!exitNow) {
             dbg_trace("Searching " + currentDepth);
-            move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, 8000);
+            move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, time);
             //move = negamax(board, currentDepth, currentDepth, -99999, 99999, undefined, startTime, 8000);
             if (move !== undefined) {
                 bestMove = move;
@@ -538,7 +547,7 @@ var ns = (function () {
         }
     }
 
-    function make_move() {
+    function make_move(time) {
         var board, min_dist, best_move, fruit_goal, i, move, start;
 
         startTime = new Date();
@@ -554,7 +563,7 @@ var ns = (function () {
 
 
         nodes_searched = 0;
-        move = search_mgr(Board, 2);
+        move = search_mgr(Board, 2, time);
         trace(nodes_searched * 1000 / ((new Date()) - startTime));
 
         return move.move;
@@ -566,28 +575,32 @@ var ns = (function () {
 }());
 
 
+var B4 = {
+    make_move: function(time) {
+        "use strict";
+        if (time === undefined) {
+            time = on_server ? 9300 : 2000;
+        }
+        return ns_b4.make_move(time);
+    },
 
-function make_move() {
-    "use strict";
-    return ns.make_move();
-}
-
-function new_game() {
-    "use strict";
-    ns.new_game();
+    new_game: function() {
+        "use strict";
+        ns_b4.new_game();
+    }
 }
 
 // Optionally include this function if you'd like to always reset to a 
 // certain board number/layout. This is useful for repeatedly testing your
 // bot(s) against known positions.
 //
-function default_board_number() {
-    return 347610;
-}
+//function default_board_number() {
+//    return 347610;
+//}
 
-function default_board_setup() {
-    return b775902_2();
-}
+//function default_board_setup() {
+//    return b775902_2();
+//}
 
 function b757429_18() {
     var setup = {
