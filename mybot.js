@@ -226,7 +226,9 @@ var ns = (function () {
                     moves.push(SOUTH);
                 }
             }
-
+            if (moves.length == 0) {
+                moves.push(PASS);
+            }
             return moves;
         },
         key: function () {
@@ -444,6 +446,7 @@ var ns = (function () {
         if (!time_is_up) {
             if (depth === 0) {
                 max = calc_score(board);
+                //trace(board.side.toString()  +" "+  max);
             } else {
                 prune = false;
                 if (moveOrder === undefined) {
@@ -481,6 +484,10 @@ var ns = (function () {
                         break;
                     }
                     board.undoMove();
+
+                    if (val.score == Infinity && Board.side == 0) {
+                        val = val;
+                    }
 
                     if (depth === sd) {
                         moveList.push({ move: moves[i], score: val.score });
@@ -537,6 +544,9 @@ var ns = (function () {
         //move = negamax(board, 4, -99999, 99999, 1, startTime, 10000);
         while (!exitNow) {
             dbg_trace("Searching " + currentDepth);
+            if(currentDepth == 16) {
+                currentDepth = currentDepth;
+            }
             move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, time);
             //move = negamax(board, currentDepth, currentDepth, -99999, 99999, undefined, startTime, 8000);
             if (move !== undefined) {
@@ -627,7 +637,7 @@ var ns = (function () {
 function make_move(time) {
     "use strict";
     if (time === undefined) {
-        time = on_server ? 9150 : 5000;
+        time = on_server ? 9150 : 2000;
     }
     return ns.make_move(time);
 }
