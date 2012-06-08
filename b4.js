@@ -579,7 +579,7 @@ var B4 = {
     make_move: function(time) {
         "use strict";
         if (time === undefined) {
-            time = on_server ? 9300 : 2000;
+            time = on_server ? 9300 : 1000;
         }
         return ns_b4.make_move(time);
     },

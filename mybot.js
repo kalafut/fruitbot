@@ -44,7 +44,7 @@ var ns = (function () {
     "use strict";
     var MY = 0, OPP = 1, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
         max_depth = 4, nodes_searched, nodeCheckThreshold, time_is_up = false, halfFruit, startTime, move_idx,
-        START = 0, COMPLETE = 1, SKIP = 2, moveTrans, moveHist, evalCache, xlat,timeCheckDelay = 500, fruitValue;
+        START = 0, COMPLETE = 1, SKIP = 2, moveTrans, evalCache, xlat,timeCheckDelay = 500, fruitValue;
 
     moveTrans = { NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W', TAKE: 'T', PASS: 'P' };
 
@@ -68,7 +68,7 @@ var ns = (function () {
             Board.side = MY;
             Board.lastMove = {};
             Board.pendingTake = false;
-            Board.moveHist = "";
+            Board.lastMove = [];
 
             for (i = 0; i < WIDTH; i += 1) {
                 Board.board[i] = [];
@@ -95,8 +95,9 @@ var ns = (function () {
 
             loc = Board.loc[Board.side];
             loc_other = Board.loc[1 - Board.side];
-            undo = { loc: { x: loc.x, y: loc.y } };
-            Board.moveHist += moveTrans[move];
+            undo = { loc: { x: loc.x, y: loc.y }, move: move };
+
+
             /*
                 pendingTake: Board.pendingTake,
                 myCollected: Board.collected[MY].slice(0),
@@ -175,19 +176,40 @@ var ns = (function () {
                     Board.board[undo.loc.x][undo.loc.y] = undo.fruitType;
                 }
             }
-            Board.moveHist = Board.moveHist.slice(0,-1);
 
             Board.side = other_side;
         },
 
-        movegen: function () {
-            var moves, gen;
+        movegen: function (moveLimiting) {
+            var moves, gen, x, y, loc, l1, l2;
 
-            gen = function (loc) {
-                var x = loc.x,
-                    y = loc.y,
-                    moves = []; // PASS is probably a waste of search time
+            loc = Board.loc[Board.side];
+            x = loc.x;
+            y = loc.y;
 
+            moves = [];
+            if (Board.history != undefined && Board.history.length > 2) {
+                l1 = Board.history[Board.history.length - 1].move;
+                l2 = Board.history[Board.history.length - 2].move;
+            }
+
+            if (moveLimiting && l1 != undefined && l2 != undefined && l1 != TAKE && l2 != TAKE) {
+                if (Board.board[x][y] > 0) {
+                    moves.push(TAKE);
+                }
+                if (x > 0 && (l2 == WEST || l2 == NORTH || l2 == SOUTH)) {
+                    moves.push(WEST);
+                }
+                if (x < WIDTH - 1 && (l2 == EAST || l2 == NORTH || l2 == SOUTH)) {
+                    moves.push(EAST);
+                }
+                if (y > 0 && l2 == NORTH) {
+                    moves.push(NORTH);
+                }
+                if (y < HEIGHT - 1 && l2 == SOUTH) {
+                    moves.push(SOUTH);
+                }
+            } else {
                 if (Board.board[x][y] > 0) {
                     moves.push(TAKE);
                 }
@@ -203,10 +225,7 @@ var ns = (function () {
                 if (y < HEIGHT - 1) {
                     moves.push(SOUTH);
                 }
-                return moves;
-            };
-
-            moves = gen(Board.loc[Board.side]);
+            }
 
             return moves;
         },
@@ -312,7 +331,7 @@ var ns = (function () {
     }
 
     function calc_score(board) {
-        var score, material, i, types, row, col, dx, dy, dist, minDist, myLoc, oppLoc,
+        var score, material, i, types, row, col, dx, dy, dist, minDist, myLoc, oppLoc, tiedCats = 0,
             myPositionValue, oppPositionValue, myCats = 0, oppCats = 0, wonCats = [], cell, myCollected, oppCollected, fruitValue = [];
         var points = {
             win: Infinity,
@@ -320,6 +339,7 @@ var ns = (function () {
         };
 
         nodes_searched += 1;
+
         //if (nodes_searched % 10000 == 0) { trace(nodes_searched.toString()); }
 
         myCollected = Board.collected[Board.side];
@@ -335,13 +355,25 @@ var ns = (function () {
             } else if (oppCollected[i] > halfFruit[i]) {
                 oppCats += 1;
                 wonCats.push(i);
+            } else if(myCollected[i] == halfFruit[i] && oppCollected[i] == halfFruit[i]) {
+                tiedCats += 1;
             }
         }
 
+        if(myCats + oppCats + tiedCats == num_item_types) {
+        }
         if (myCats > num_item_types / 2) {
             return points.win;
         } else if (oppCats > num_item_types / 2) {
             return points.lose;
+        }
+
+        if(myCats + oppCats + tiedCats == num_item_types) {
+            if(myCats > oppCats) {
+                return points.win;
+            } else if(myCats < oppCats) {
+                return points.lose;
+            }
         }
 
         // Compute fruit values
@@ -415,7 +447,7 @@ var ns = (function () {
             } else {
                 prune = false;
                 if (moveOrder === undefined) {
-                    moves = board.movegen();
+                    moves = board.movegen(true);
                 } else {
                     moves = moveOrder;
                 }
@@ -444,7 +476,7 @@ var ns = (function () {
 
                     if (val !== undefined) {
                         val.score *= -1;
-                        val.score -= 0.01 * (20 - depth);
+                        //val.score -= 0.01 * (20 - depth);
                     } else {
                         break;
                     }
@@ -595,7 +627,7 @@ var ns = (function () {
 function make_move(time) {
     "use strict";
     if (time === undefined) {
-        time = on_server ? 9150 : 2000;
+        time = on_server ? 9150 : 5000;
     }
     return ns.make_move(time);
 }
@@ -609,12 +641,12 @@ function new_game() {
 // certain board number/layout. This is useful for repeatedly testing your
 // bot(s) against known positions.
 //
-function default_board_number() {
+//function default_board_number() {
 //    return 347610;
-}
+//}
 
 function default_board_setup() {
-    //return b836151();
+    return t1();
 }
 
 function b775902_2() {
@@ -752,7 +784,95 @@ function b836151() {
 
     return setup;
 }
+function b912619() {
+    var setup = {
+        width: 7,
+        height: 7,
+                //  Apple, Banana, Cherry, Me, Orange
+        myFruit:    [ 0.5,     0.5,      1,      0,     0 ],
+        oppFruit:   [ 0.5,     1.5,      1,      0,     0 ],
+        board: [
+            // 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
+            "+-----------------------------------------------------------+",
+            "|   |   |   | C | @ |   | B |   |   |   |   |   |   |   |   |", // 1
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 2
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   | % |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 3
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 4
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 5
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "| C |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 6
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   | C |   |   |   |   |   |   |   |   |", // 7
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 8
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 9
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 10
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 11
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 12
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 13
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 14
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 15
+            "+-----------------------------------------------------------+" ]
+    };
 
+    return setup;
+}
+
+function t1() {
+    var setup = {
+        width: 6,
+        height: 6,
+                //  Apple, Banana, Cherry, Me, Orange
+        myFruit:    [ 0.5,   1.5,      2,      0,     0 ],
+        oppFruit:   [ 0.5,   1.5,      1,      0,     0 ],
+        board: [
+            // 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
+            "+-----------------------------------------------------------+",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 1
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 2
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   | @ |   |   |   |   |   |   |   |   |   |   |", // 3
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   | C |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 4
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |C% |   |   |   |   |   |   |   |   |   |   |   |", // 5
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 6
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 7
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 8
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 9
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 10
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 11
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 12
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 13
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 14
+            "+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---|",
+            "|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |", // 15
+            "+-----------------------------------------------------------+" ]
+    };
+
+    return setup;
+}
 function blank() {
     var setup = {
         width: 13,

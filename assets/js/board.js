@@ -111,13 +111,18 @@ var Board = {
         } catch(e) {
         }
         if(new_game_exists !== undefined) {
+            Board.myMove = true;
             new_game();
         }
         // SimpleBot currently doesn't need any sort of init, but if it did, it'd be called here too
+        Board.myMove = false;
         B4.new_game();
     },
     processMove: function() {
+        Board.myMove = true;
         var myMove = make_move();
+        Board.myMove = false;
+        Board.side = -1;
         var simpleBotMove = B4.make_move();
         if ((Board.myX == Board.oppX) && (Board.myY == Board.oppY) && (myMove == TAKE) && (simpleBotMove == TAKE) && Board.board[Board.myX][Board.myY] > 0) {
             Board.myBotCollected[Board.board[Board.myX][Board.myY]-1] = Board.myBotCollected[Board.board[Board.myX][Board.myY]-1] + 0.5;
@@ -317,27 +322,51 @@ function get_number_of_item_types() {
 }
 
 function get_my_x() {
-    return Board.myX;
+    if (Board.myMove) {
+        return Board.myX;
+    } else {
+        return Board.oppX;
+    }
 }
 
 function get_my_y() {
-    return Board.myY;
+    if (Board.myMove) {
+        return Board.myY;
+    } else {
+        return Board.oppY;
+    }
 }
 
 function get_opponent_x() {
-    return Board.oppX;
+    if (Board.myMove) {
+        return Board.oppX;
+    } else {
+        return Board.myX;
+    }
 }
 
 function get_opponent_y() {
-    return Board.oppY;
+    if (Board.myMove) {
+        return Board.oppY;
+    } else {
+        return Board.myY;
+    }
 }
 
 function get_my_item_count(type) {
-    return Board.myBotCollected[type-1];
+    if (Board.myMove) {
+        return Board.myBotCollected[type-1];
+    } else {
+        return Board.simpleBotCollected[type-1];
+    }
 }
 
 function get_opponent_item_count(type) {
-    return Board.simpleBotCollected[type-1];
+    if (Board.myMove) {
+        return Board.simpleBotCollected[type-1];
+    } else {
+        return Board.myBotCollected[type-1];
+    }
 }
 
 function get_total_item_count(type) {
