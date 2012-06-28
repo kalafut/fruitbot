@@ -334,11 +334,7 @@ var ns = (function () {
 
     function calc_score(board) {
         var score, material, i, types, row, col, dx, dy, dist, minDist, myLoc, oppLoc, tiedCats = 0,
-            myPositionValue, oppPositionValue, myCats = 0, oppCats = 0, wonCats = [], cell, myCollected, oppCollected, fruitValue = [];
-        var points = {
-            win: Infinity,
-            lose: -Infinity
-        };
+            myPositionValue, oppPositionValue, myCats = 0, oppCats = 0, wonTiedCats = [], cell, myCollected, oppCollected, fruitValue = [];
 
         nodes_searched += 1;
 
@@ -353,34 +349,33 @@ var ns = (function () {
         for (i = 1; i <= num_item_types; i += 1) {
             if (myCollected[i] > halfFruit[i]) {
                 myCats += 1;
-                wonCats.push(i);
+                wonTiedCats.push(i);
             } else if (oppCollected[i] > halfFruit[i]) {
                 oppCats += 1;
-                wonCats.push(i);
+                wonTiedCats.push(i);
             } else if(myCollected[i] == halfFruit[i] && oppCollected[i] == halfFruit[i]) {
                 tiedCats += 1;
+                wonTiedCats.push(i);
             }
         }
 
-        if(myCats + oppCats + tiedCats == num_item_types) {
-        }
         if (myCats > num_item_types / 2) {
-            return points.win;
+            return Infinity;
         } else if (oppCats > num_item_types / 2) {
-            return points.lose;
+            return -Infinity;
         }
 
         if(myCats + oppCats + tiedCats == num_item_types) {
             if(myCats > oppCats) {
-                return points.win;
+                return Infinity;
             } else if(myCats < oppCats) {
-                return points.lose;
+                return -Infinity;
             }
         }
 
         // Compute fruit values
         for (i = 1; i <= num_item_types; i += 1) {
-            if(wonCats.indexOf(i) === -1) {
+            if(wonTiedCats.indexOf(i) === -1) {
                 fruitValue[i] = 100 / (halfFruit[i] + 0.5 - Math.max(myCollected[i], oppCollected[i]));
             } else {
                 fruitValue[i] = 0;
@@ -394,7 +389,7 @@ var ns = (function () {
         for (row = 0; row < HEIGHT; row += 1) {
             for (col = 0; col < WIDTH; col += 1) {
                 cell = board.board[col][row];
-                if (cell > 0 && wonCats.indexOf(cell) === -1) {
+                if (cell > 0 && wonTiedCats.indexOf(cell) === -1) {
                     dx = col - myLoc.x;
                     dy = row - myLoc.y;
                     dist = Math.abs(dx) + Math.abs(dy);
@@ -412,7 +407,7 @@ var ns = (function () {
 
         material = 0;
         for (i = 1; i <= num_item_types; i += 1) {
-            if (wonCats.indexOf(i) === -1) {
+            if (wonTiedCats.indexOf(i) === -1) {
                 material += fruitValue[i] * myCollected[i] - fruitValue[i] * oppCollected[i];
             }
         }
@@ -586,6 +581,7 @@ var ns = (function () {
         num_cells = WIDTH * HEIGHT;
         num_item_types = get_number_of_item_types();
 
+        /*
         move_idx = [];
         for (col = 0; col < WIDTH; col += 1) {
             moves = [];
@@ -605,6 +601,7 @@ var ns = (function () {
                 }
             }
         }
+        */
 
         // Compute half fruit thresholds
         halfFruit = [];
@@ -637,7 +634,7 @@ var ns = (function () {
 function make_move(time) {
     "use strict";
     if (time === undefined) {
-        time = on_server ? 9150 : 2000;
+        time = on_server ? 9300 : 2000;
     }
     return ns.make_move(time);
 }
@@ -927,3 +924,4 @@ function blank() {
 
     return setup;
 }
+
