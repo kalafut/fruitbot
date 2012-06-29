@@ -289,56 +289,12 @@ var ns = (function () {
         return new_board;
     }
 
-    function gravity(board) {
-        var force, theta, dx, dy, dist, tx, ty, d, move,
-            mx = get_my_x(), my = get_my_y(), row, col,
-            vector = {
-                theta: 0,
-                r: 0
-            };
-        for (row = 0; row < HEIGHT; row += 1) {
-            for (col = 0; col < WIDTH; col += 1) {
-                if (board[col][row] > 0) {
-                    dx = col - mx;
-                    dy = row - my;
-                    dist = Math.sqrt(Math.pow(dx, 2) + Math.pow(dy, 2));
-                    if (dist === 0) {
-                        return TAKE;
-                    }
-
-                    force = 1 / Math.pow(dist, 2);
-                    theta = Math.atan2(-dy, dx);
-                    tx = vector.r * Math.cos(vector.theta);
-                    ty = vector.r * Math.sin(vector.theta);
-                    tx += force * Math.cos(theta);
-                    ty += force * Math.sin(theta);
-                    vector.r = Math.sqrt(Math.pow(tx, 2) + Math.pow(ty, 2));
-                    vector.theta = Math.atan2(ty, tx);
-                }
-            }
-        }
-        d = vector.theta;
-        if (d <= Math.PI / 4 && d > -Math.PI / 4) {
-            move =  EAST;
-        } else if (d >= Math.PI / 4 && d < 3 * Math.PI / 4) {
-            move =  NORTH;
-        } else if (d >= 3 * Math.PI / 4 || d <= -3 * Math.PI / 4) {
-            move =  WEST;
-        } else {
-            move = SOUTH;
-        }
-
-        return move;
-
-    }
 
     function calc_score(board) {
         var score, material, i, types, row, col, dx, dy, dist, minDist, myLoc, oppLoc, tiedCats = 0,
-            myPositionValue, oppPositionValue, myCats = 0, oppCats = 0, wonTiedCats = [], cell, myCollected, oppCollected, fruitValue = [];
+            myPositionValue, oppPositionValue, myCats = 0, oppCats = 0, wonTiedCats = {}, cell, myCollected, oppCollected, fruitValue = {};
 
         nodes_searched += 1;
-
-        //if (nodes_searched % 10000 == 0) { trace(nodes_searched.toString()); }
 
         myCollected = Board.collected[Board.side];
         oppCollected = Board.collected[1 - Board.side];
@@ -349,13 +305,13 @@ var ns = (function () {
         for (i = 1; i <= num_item_types; i += 1) {
             if (myCollected[i] > halfFruit[i]) {
                 myCats += 1;
-                wonTiedCats.push(i);
+                wonTiedCats[i] = true;
             } else if (oppCollected[i] > halfFruit[i]) {
                 oppCats += 1;
-                wonTiedCats.push(i);
+                wonTiedCats[i] = true;
             } else if(myCollected[i] == halfFruit[i] && oppCollected[i] == halfFruit[i]) {
                 tiedCats += 1;
-                wonTiedCats.push(i);
+                wonTiedCats[i] = true;
             }
         }
 
@@ -375,7 +331,7 @@ var ns = (function () {
 
         // Compute fruit values
         for (i = 1; i <= num_item_types; i += 1) {
-            if(wonTiedCats.indexOf(i) === -1) {
+            if(!wonTiedCats[i]) {
                 fruitValue[i] = 100 / (halfFruit[i] + 0.5 - Math.max(myCollected[i], oppCollected[i]));
             } else {
                 fruitValue[i] = 0;
@@ -383,13 +339,12 @@ var ns = (function () {
         }
 
         // Compute position value
-        //   100 / (dist + 1)
         myPositionValue = 0;
         oppPositionValue = 0;
         for (row = 0; row < HEIGHT; row += 1) {
             for (col = 0; col < WIDTH; col += 1) {
                 cell = board.board[col][row];
-                if (cell > 0 && wonTiedCats.indexOf(cell) === -1) {
+                if (cell > 0 && !wonTiedCats[cell]) {
                     dx = col - myLoc.x;
                     dy = row - myLoc.y;
                     dist = Math.abs(dx) + Math.abs(dy);
@@ -407,7 +362,7 @@ var ns = (function () {
 
         material = 0;
         for (i = 1; i <= num_item_types; i += 1) {
-            if (wonTiedCats.indexOf(i) === -1) {
+            if (!wonTiedCats[i]) {
                 material += fruitValue[i] * myCollected[i] - fruitValue[i] * oppCollected[i];
             }
         }
@@ -418,7 +373,7 @@ var ns = (function () {
     }
 
     function negamax(board, sd, depth, alpha, beta, moveOrder, startTime, maxTimeMS) {
-        var ret_val, moves, i, j, val, best_move, best_line, best_score, prune, hash1, hash2, max;
+        var ret_val, moves, i, j, val, best_move, best_score, prune, hash1, hash2, max;
         var boardHash, cacheEval, moveList;
 
 
@@ -427,12 +382,11 @@ var ns = (function () {
         }
 
         max = -Infinity;
-        best_line = [];
         if (timeCheckDelay < 0) {
             if ((new Date()) - startTime > maxTimeMS) {
                 time_is_up = true;
             } else {
-                timeCheckDelay = 500;
+                timeCheckDelay = 750;
             }
         } else {
             timeCheckDelay--;
@@ -441,7 +395,6 @@ var ns = (function () {
         if (!time_is_up) {
             if (depth === 0) {
                 max = calc_score(board);
-                //trace(board.side.toString()  +" "+  max);
             } else {
                 prune = false;
                 if (moveOrder === undefined) {
@@ -450,54 +403,26 @@ var ns = (function () {
                     moves = moveOrder;
                 }
                 best_move = moves[0];
-                //if(depth === sd && moveOrder !== undefined) {
-                //    moves = moveOrder;
-                //}
 
                 for (i = 0; i < moves.length && !time_is_up && !prune; i += 1) {
-                    //hash1 = board.key();
                     board.processMove(moves[i]);
-                    /*
-                    boardHash = board.hash();
-                    cacheEval = evalCache[boardHash];
-
-                    if (cacheEval !== undefined &&
-                        cacheEval.depth >= depth - 1) {
-                        val = cacheEval.eval;
-                    } else {
-                        val = negamax(board, sd, depth - 1, -beta, -alpha, moveOrder, startTime, maxTimeMS);
-                        if (depth > 6) {
-                            evalCache[boardHash] = { eval:val, depth: depth - 1};
-                        }
-                    }*/
                     val = negamax(board, sd, depth - 1, -beta, -alpha, undefined, startTime, maxTimeMS);
 
                     if (val !== undefined) {
                         val.score *= -1;
-                        //val.score -= 0.01 * (20 - depth);
                     } else {
                         break;
                     }
                     board.undoMove();
 
-                    if (val.score == Infinity && Board.side == 0) {
-                        val = val;
-                    }
-
                     if (depth === sd) {
                         moveList.push({ move: moves[i], score: val.score });
                     }
-                    //hash2 = board.key();
-                    //if(hash1 !== hash2) {
-                    //    alert('Undo error');
-                    //}
 
 
                     if (val.score > max) {
                         max = val.score;
                         best_move = moves[i];
-                        best_line = val.line;
-                        //ret_val = { score: max, move: moves[i], line: val.line };
                     }
 
                     if (val.score > alpha) {
@@ -508,15 +433,10 @@ var ns = (function () {
                         max = alpha;
                         prune = true;
                     }
-
                 }
-                //if (ret_val === undefined) {
-                //    ret_val = { score: max };
-                //}
             }
 
-            best_line.unshift(best_move);
-            ret_val = { move: best_move, score: max, line: best_line, moveList: moveList };
+            ret_val = { move: best_move, score: max, moveList: moveList };
         }
 
         if (time_is_up) {
@@ -539,15 +459,10 @@ var ns = (function () {
         //move = negamax(board, 4, -99999, 99999, 1, startTime, 10000);
         while (!exitNow) {
             dbg_trace("Searching " + currentDepth);
-            if(currentDepth == 16) {
-                currentDepth = currentDepth;
-            }
             move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, time);
-            //move = negamax(board, currentDepth, currentDepth, -99999, 99999, undefined, startTime, 8000);
             if (move !== undefined) {
                 bestMove = move;
                 dbg_trace("Best move: " + move.move);
-                //dbg_trace(bestMove.line.toString());
 
                 if (bestMove.score == Infinity) {
                     trace("===Forced Win Found===");
@@ -569,7 +484,6 @@ var ns = (function () {
             trace("Move: " + xlat[bestMove.moveList[i].move] + "  Score: " + bestMove.moveList[i].score);
         }
         trace((currentDepth - 2).toString() + " ply / " + nodes_searched.toString() + " nodes / " +(((new Date()) - startTime)/1000).toString() + "s" );
-        //trace(bestMove.line.toString());
 
         return bestMove;
 
