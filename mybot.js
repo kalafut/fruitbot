@@ -70,6 +70,10 @@ var ns = (function () {
             Board.pendingTake = false;
             Board.lastMove = [];
             Board.initialFruitLocations = [];
+            Board.northLimit = HEIGHT;
+            Board.southLimit = 0;
+            Board.westLimit = WIDTH;
+            Board.eastLimit = 0;
 
             for (i = 0; i < WIDTH; i += 1) {
                 Board.board[i] = [];
@@ -77,6 +81,10 @@ var ns = (function () {
                     Board.board[i][j] = start_board[i][j];
                     if (start_board[i][j] > 0) {
                         Board.initialFruitLocations.push({x:i, y:j});
+                        Board.northLimit = Math.min(Board.northLimit, j);
+                        Board.southLimit = Math.max(Board.southLimit, j);
+                        Board.westLimit = Math.min(Board.westLimit, i);
+                        Board.eastLimit = Math.max(Board.eastLimit, i);
                     }
                 }
             }
@@ -201,32 +209,32 @@ var ns = (function () {
                 if (Board.board[x][y] > 0) {
                     moves.push(TAKE);
                 }
-                if (x > 0 && (l2 == WEST || l2 == NORTH || l2 == SOUTH)) {
+                if (x > Board.westLimit && (l2 == WEST || l2 == NORTH || l2 == SOUTH)) {
                     moves.push(WEST);
                 }
-                if (x < WIDTH - 1 && (l2 == EAST || l2 == NORTH || l2 == SOUTH)) {
+                if (x < Board.eastLimit && (l2 == EAST || l2 == NORTH || l2 == SOUTH)) {
                     moves.push(EAST);
                 }
-                if (y > 0 && l2 == NORTH) {
+                if (y > Board.northLimit && l2 == NORTH) {
                     moves.push(NORTH);
                 }
-                if (y < HEIGHT - 1 && l2 == SOUTH) {
+                if (y < Board.southLimit && l2 == SOUTH) {
                     moves.push(SOUTH);
                 }
             } else {
                 if (Board.board[x][y] > 0) {
                     moves.push(TAKE);
                 }
-                if (x > 0) {
+                if (x > Board.westLimit) {
                     moves.push(WEST);
                 }
-                if (x < WIDTH - 1) {
+                if (x < Board.eastLimit) {
                     moves.push(EAST);
                 }
-                if (y > 0) {
+                if (y > Board.northLimit) {
                     moves.push(NORTH);
                 }
-                if (y < HEIGHT - 1) {
+                if (y < Board.southLimit) {
                     moves.push(SOUTH);
                 }
             }
@@ -531,7 +539,7 @@ var ns = (function () {
 function make_move(time) {
     "use strict";
     if (time === undefined) {
-        time = on_server ? 9300 : 2000;
+        time = on_server ? 9300 : 200;
     }
     return ns.make_move(time);
 }
@@ -545,9 +553,9 @@ function new_game() {
 // certain board number/layout. This is useful for repeatedly testing your
 // bot(s) against known positions.
 //
-//function default_board_number() {
-//    return 347610;
-//}
+function default_board_number() {
+    return 571395;
+}
 
 function default_board_setup() {
     //return t1();
