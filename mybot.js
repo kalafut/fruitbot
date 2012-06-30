@@ -69,11 +69,15 @@ var ns = (function () {
             Board.lastMove = {};
             Board.pendingTake = false;
             Board.lastMove = [];
+            Board.initialFruitLocations = [];
 
             for (i = 0; i < WIDTH; i += 1) {
                 Board.board[i] = [];
                 for (j = 0; j < HEIGHT; j += 1) {
                     Board.board[i][j] = start_board[i][j];
+                    if (start_board[i][j] > 0) {
+                        Board.initialFruitLocations.push({x:i, y:j});
+                    }
                 }
             }
 
@@ -341,22 +345,23 @@ var ns = (function () {
         // Compute position value
         myPositionValue = 0;
         oppPositionValue = 0;
-        for (row = 0; row < HEIGHT; row += 1) {
-            for (col = 0; col < WIDTH; col += 1) {
-                cell = board.board[col][row];
-                if (cell > 0 && !wonTiedCats[cell]) {
-                    dx = col - myLoc.x;
-                    dy = row - myLoc.y;
-                    dist = Math.abs(dx) + Math.abs(dy);
+        for (i=0; i < board.initialFruitLocations.length; i++) {
+            col = board.initialFruitLocations[i].x;
+            row = board.initialFruitLocations[i].y;
 
-                    myPositionValue += fruitValue[cell] / (dist + 1);
+            cell = board.board[col][row];
+            if (cell > 0 && !wonTiedCats[cell]) {
+                dx = col - myLoc.x;
+                dy = row - myLoc.y;
+                dist = Math.abs(dx) + Math.abs(dy);
 
-                    dx = col - oppLoc.x;
-                    dy = row - oppLoc.y;
-                    dist = Math.abs(dx) + Math.abs(dy);
+                myPositionValue += fruitValue[cell] / (dist + 1);
 
-                    oppPositionValue += fruitValue[cell] / (dist + 1);
-                }
+                dx = col - oppLoc.x;
+                dy = row - oppLoc.y;
+                dist = Math.abs(dx) + Math.abs(dy);
+
+                oppPositionValue += fruitValue[cell] / (dist + 1);
             }
         }
 
@@ -495,28 +500,6 @@ var ns = (function () {
         num_cells = WIDTH * HEIGHT;
         num_item_types = get_number_of_item_types();
 
-        /*
-        move_idx = [];
-        for (col = 0; col < WIDTH; col += 1) {
-            moves = [];
-            move_idx[col] = moves;
-            for (row = 0; row < HEIGHT; row += 1) {
-                if (col > 0) {
-                    moves.push(WEST);
-                }
-                if (col < WIDTH - 1) {
-                    moves.push(EAST);
-                }
-                if (row > 0) {
-                    moves.push(NORTH);
-                }
-                if (row < HEIGHT - 1) {
-                    moves.push(SOUTH);
-                }
-            }
-        }
-        */
-
         // Compute half fruit thresholds
         halfFruit = [];
         for (i = 1; i <= num_item_types; i += 1) {
@@ -567,7 +550,7 @@ function new_game() {
 //}
 
 function default_board_setup() {
-    return t1();
+    //return t1();
 }
 
 function b775902_2() {
