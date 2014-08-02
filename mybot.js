@@ -21,6 +21,15 @@
  * Shared Take Declined
  */
 
+//shims = require("./shims.js");
+//trace = shims.trace;
+//EAST = shims.EAST;
+//NORTH = shims.NORTH;
+//WEST = shims.WEST;
+//SOUTH = shims.SOUTH;
+//TAKE = shims.TAKE;
+//PASS = shims.PASS;
+
 var on_server;
 var debug = 1;
 
@@ -44,7 +53,7 @@ var ns = (function () {
     "use strict";
     var MY = 0, OPP = 1, num_cells, num_types, x_delta, y_delta, pass, Board, num_item_types,
         max_depth = 4, nodes_searched, nodeCheckThreshold, time_is_up = false, halfFruit, startTime, move_idx,
-        START = 0, COMPLETE = 1, SKIP = 2, moveTrans, evalCache, xlat,timeCheckDelay = 500, fruitValue;
+        START = 0, COMPLETE = 1, SKIP = 2, moveTrans, evalCache, xlat,timeCheckDelay = 500, fruitValue, wonTiedCats;
 
     moveTrans = { NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W', TAKE: 'T', PASS: 'P' };
 
@@ -304,7 +313,7 @@ var ns = (function () {
 
     function calc_score(board) {
         var score, material, i, types, row, col, dx, dy, dist, minDist, myLoc, oppLoc, tiedCats = 0,
-            myPositionValue, oppPositionValue, myCats = 0, oppCats = 0, wonTiedCats = {}, cell, myCollected, oppCollected, fruitValue = {};
+            myPositionValue, oppPositionValue, myCats = 0, oppCats = 0, cell, myCollected, oppCollected;
 
         nodes_searched += 1;
 
@@ -324,7 +333,10 @@ var ns = (function () {
             } else if(myCollected[i] == halfFruit[i] && oppCollected[i] == halfFruit[i]) {
                 tiedCats += 1;
                 wonTiedCats[i] = true;
+            } else {
+                wonTiedCats[i] = false;
             }
+
         }
 
         if (myCats > num_item_types / 2) {
@@ -513,6 +525,9 @@ var ns = (function () {
         for (i = 1; i <= num_item_types; i += 1) {
             halfFruit[i] = get_total_item_count(i) / 2;
         }
+
+        fruitValue = new Array(num_item_types + 1),
+        wonTiedCats = new Array(num_item_types + 1);
     }
 
     function make_move(time) {
@@ -539,7 +554,7 @@ var ns = (function () {
 function make_move(time) {
     "use strict";
     if (time === undefined) {
-        time = on_server ? 9300 : 200;
+        time = on_server ? 9900 : 1000;
     }
     return ns.make_move(time);
 }
