@@ -30,6 +30,22 @@
 //TAKE = shims.TAKE;
 //PASS = shims.PASS;
 
+bEAST =  1 << 0;
+bNORTH = 1 << 1;
+bWEST =  1 << 2;
+bSOUTH = 1 << 3;
+bTAKE =  1 << 4;
+bPASS =  1 << 5;
+
+var moveConv = {};
+moveConv[bEAST] = EAST;
+moveConv[bNORTH] = NORTH;
+moveConv[bWEST] = WEST;
+moveConv[bSOUTH] = SOUTH;
+moveConv[bTAKE] = TAKE;
+moveConv[bPASS] = PASS;
+
+var possible_moves = [ bTAKE, bEAST, bNORTH, bWEST, bSOUTH, bPASS ];
 var on_server;
 var debug = 1;
 
@@ -58,12 +74,12 @@ var ns = (function () {
     moveTrans = { NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W', TAKE: 'T', PASS: 'P' };
 
     xlat = [];
-    xlat[EAST] = "EAST";
-    xlat[NORTH] = "NORTH";
-    xlat[WEST] = "WEST";
-    xlat[SOUTH] = "SOUTH";
-    xlat[TAKE] = "TAKE";
-    xlat[PASS] = "PASS";
+    xlat[bEAST] = "EAST";
+    xlat[bNORTH] = "NORTH";
+    xlat[bWEST] = "WEST";
+    xlat[bSOUTH] = "SOUTH";
+    xlat[bTAKE] = "TAKE";
+    xlat[bPASS] = "PASS";
 
 
     Board = {
@@ -126,7 +142,7 @@ var ns = (function () {
                 boardFruitChange:
             };*/
 
-            if (move === TAKE) {
+            if (move & bTAKE) {
                 fruitType = Board.board[loc.x][loc.y];
                 undo.fruitType = fruitType;
                 if (!Board.pendingTake) {
@@ -149,20 +165,20 @@ var ns = (function () {
                     undo.sharedTake = COMPLETE;
                 }
             } else {
-                if (move !== TAKE && Board.pendingTake) {
+                if (!(move & bTAKE) && Board.pendingTake) {
                     fruitType = Board.board[loc.x][loc.y];
                     Board.collected[1 - Board.side][fruitType] += 0.5;
                     Board.board[loc.x][loc.y] = 0;
                     undo.fruitType = fruitType;
                     undo.sharedTake = SKIP;
                 }
-                if (move === NORTH) {
+                if (move & bNORTH) {
                     Board.loc[Board.side].y -= 1;
-                } else if (move === SOUTH) {
+                } else if (move & bSOUTH) {
                     Board.loc[Board.side].y += 1;
-                } else if (move === EAST) {
+                } else if (move & bEAST) {
                     Board.loc[Board.side].x += 1;
-                } else if (move === WEST) {
+                } else if (move & bWEST) {
                     Board.loc[Board.side].x -= 1;
                 }
                 Board.pendingTake = false;
@@ -208,47 +224,49 @@ var ns = (function () {
             x = loc.x;
             y = loc.y;
 
-            moves = [];
+	    moves = 0;
             if (Board.history != undefined && Board.history.length > 2) {
                 l1 = Board.history[Board.history.length - 1].move;
                 l2 = Board.history[Board.history.length - 2].move;
-            }
+            } else {
+		l1 = l2 = 0;
+	    }
 
-            if (moveLimiting && l1 != undefined && l2 != undefined && l1 != TAKE && l2 != TAKE) {
+            if (moveLimiting && l1 != 0 && l2 != 0 && !(l1 & bTAKE) && !(l2 & bTAKE)) {
                 if (Board.board[x][y] > 0) {
-                    moves.push(TAKE);
+		    moves |= bTAKE;
                 }
-                if (x > Board.westLimit && (l2 == WEST || l2 == NORTH || l2 == SOUTH)) {
-                    moves.push(WEST);
+                if (x > Board.westLimit && (l2 & bWEST || l2 & bNORTH || l2 & bSOUTH)) {
+                    moves |= bWEST;
                 }
-                if (x < Board.eastLimit && (l2 == EAST || l2 == NORTH || l2 == SOUTH)) {
-                    moves.push(EAST);
+                if (x < Board.eastLimit && (l2 & bEAST || l2 & bNORTH || l2 & bSOUTH)) {
+                    moves |= bEAST;
                 }
-                if (y > Board.northLimit && l2 == NORTH) {
-                    moves.push(NORTH);
+                if (y > Board.northLimit && l2 & bNORTH) {
+                    moves |= bNORTH;
                 }
-                if (y < Board.southLimit && l2 == SOUTH) {
-                    moves.push(SOUTH);
+                if (y < Board.southLimit && l2 & bSOUTH) {
+                    moves |= bSOUTH;
                 }
             } else {
                 if (Board.board[x][y] > 0) {
-                    moves.push(TAKE);
+                    moves |= bTAKE;
                 }
                 if (x > Board.westLimit) {
-                    moves.push(WEST);
+                    moves |= bWEST;
                 }
                 if (x < Board.eastLimit) {
-                    moves.push(EAST);
+                    moves |= bEAST;
                 }
                 if (y > Board.northLimit) {
-                    moves.push(NORTH);
+                    moves |= bNORTH;
                 }
                 if (y < Board.southLimit) {
-                    moves.push(SOUTH);
+                    moves |= bSOUTH;
                 }
             }
-            if (moves.length == 0) {
-                moves.push(PASS);
+            if (moves == 0) {
+                moves |= bPASS;
             }
             return moves;
         },
@@ -400,7 +418,7 @@ var ns = (function () {
     function negamax(board, sd, depth, alpha, beta, moveOrder, startTime, maxTimeMS) {
         var ret_val, moves, i, j, val, best_move, best_score, prune, hash1, hash2, max;
         var boardHash, cacheEval, moveList;
-
+	var move;
 
         if(depth === sd) {
             moveList = [];
@@ -422,15 +440,19 @@ var ns = (function () {
                 max = calc_score(board);
             } else {
                 prune = false;
-                if (moveOrder === undefined) {
-                    moves = board.movegen(true);
-                } else {
-                    moves = moveOrder;
-                }
-                best_move = moves[0];
+                moves = board.movegen(true);
+                
+                best_move = -1;
 
-                for (i = 0; i < moves.length && !time_is_up && !prune; i += 1) {
-                    board.processMove(moves[i]);
+                for (i = 0; i < possible_moves.length && !time_is_up && !prune; i += 1) {
+		    move = possible_moves[i] & moves;
+		    if(moves ===0) {
+			continue;
+		    }
+		    if( best_move === -1) {
+                        best_move = move;
+                    }
+                    board.processMove(possible_moves[i] & moves);
                     val = negamax(board, sd, depth - 1, -beta, -alpha, undefined, startTime, maxTimeMS);
 
                     if (val !== undefined) {
@@ -440,14 +462,9 @@ var ns = (function () {
                     }
                     board.undoMove();
 
-                    if (depth === sd) {
-                        moveList.push({ move: moves[i], score: val.score });
-                    }
-
-
                     if (val.score > max) {
                         max = val.score;
-                        best_move = moves[i];
+                        best_move = move;
                     }
 
                     if (val.score > alpha) {
@@ -461,7 +478,7 @@ var ns = (function () {
                 }
             }
 
-            ret_val = { move: best_move, score: max, moveList: moveList };
+            ret_val = { move: best_move, score: max };
         }
 
         if (time_is_up) {
@@ -487,17 +504,11 @@ var ns = (function () {
             move = negamax(board, currentDepth, currentDepth, -99999, 99999, moveList, startTime, time);
             if (move !== undefined) {
                 bestMove = move;
-                dbg_trace("Best move: " + move.move);
+                dbg_trace("Best move: " + move.move + " Score: " + move.score);
 
                 if (bestMove.score == Infinity) {
                     trace("===Forced Win Found===");
                     exitNow = true;
-                }
-
-                move.moveList.sort( function(a,b) { return ( a.score >= b.score ) ? -1 : 1; } );
-                moveList = [];
-                for (i = 0; i < move.moveList.length; i++) {
-                    moveList[i] = move.moveList[i].move;
                 }
             } else {
                 exitNow = true;
@@ -505,9 +516,7 @@ var ns = (function () {
 
             currentDepth += 2;
         }
-        for(i = 0; i < bestMove.moveList.length; i++) {
-            trace("Move: " + xlat[bestMove.moveList[i].move] + "  Score: " + bestMove.moveList[i].score);
-        }
+
         trace((currentDepth - 2).toString() + " ply / " + nodes_searched.toString() + " nodes / " +(((new Date()) - startTime)/1000).toString() + "s" );
 
         return bestMove;
@@ -541,7 +550,9 @@ var ns = (function () {
         move = search_mgr(Board, 2, time);
         trace(nodes_searched * 1000 / ((new Date()) - startTime));
 
-        return move.move;
+	
+	
+        return moveConv[move.move];
     }
 
 
@@ -844,4 +855,3 @@ function blank() {
 
     return setup;
 }
-
